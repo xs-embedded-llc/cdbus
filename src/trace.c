@@ -142,7 +142,7 @@ cdbus_traceMessage
         else if (DBUS_MESSAGE_TYPE_ERROR == msgType )
         {
             errName = dbus_message_get_error_name(msg);
-            CDBUS_TRACE((level, "(RSer=%u) [%s]",
+            CDBUS_TRACE((level, "(RSer=%u) [%s] %s",
                                     dbus_message_get_reply_serial(msg),
                                     msgTypeStr,
                                     errName ? errName : ""));

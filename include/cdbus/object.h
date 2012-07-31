@@ -39,7 +39,7 @@ struct cdbus_Interface;
 struct cdbus_Connection;
 
 typedef struct cdbus_Object cdbus_Object;
-typedef DBusHandlerResult (*cdbus_ObjectMessageHandler)(struct cdbus_Object* obj,
+typedef DBusHandlerResult (*cdbus_ObjectMessageHandler)(struct cdbus_Object*,
                             struct cdbus_Connection*, DBusMessage*);
 
 CDBUS_EXPORT cdbus_Object* cdbus_objectNew(const cdbus_Char* objPath,
@@ -48,7 +48,8 @@ CDBUS_EXPORT cdbus_Object* cdbus_objectNew(const cdbus_Char* objPath,
 CDBUS_EXPORT cdbus_Object* cdbus_objectRef(cdbus_Object* obj);
 CDBUS_EXPORT void cdbus_objectUnref(cdbus_Object* obj);
 
-CDBUS_EXPORT cdbus_HResult cdbus_objectGetPath(cdbus_Object* obj, cdbus_Char* buf, cdbus_UInt32* size);
+CDBUS_EXPORT cdbus_HResult cdbus_objectCopyPath(cdbus_Object* obj, cdbus_Char* buf, cdbus_UInt32* size);
+CDBUS_EXPORT const cdbus_Char* cdbus_objectGetPath(cdbus_Object* obj);
 CDBUS_EXPORT void cdbus_objectSetData(cdbus_Object* obj, void* data);
 CDBUS_EXPORT void* cdbus_objectGetData(cdbus_Object* obj);
 CDBUS_EXPORT cdbus_Bool cdbus_objectAddInterface(cdbus_Object* obj, struct cdbus_Interface* intf);

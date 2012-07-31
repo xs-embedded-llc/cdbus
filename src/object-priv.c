@@ -138,8 +138,26 @@ void cdbus_objectUnref
 }
 
 
-cdbus_HResult
+const cdbus_Char*
 cdbus_objectGetPath
+    (
+    cdbus_Object*   obj
+    )
+{
+    const cdbus_Char* path = NULL;
+
+    if ( NULL != obj )
+    {
+        CDBUS_LOCK(obj->lock);
+        path = obj->objPath;
+        CDBUS_UNLOCK(obj->lock);
+    }
+    return path;
+}
+
+
+cdbus_HResult
+cdbus_objectCopyPath
     (
     cdbus_Object*   obj,
     cdbus_Char*     buf,

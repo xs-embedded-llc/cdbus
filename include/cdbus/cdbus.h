@@ -37,5 +37,7 @@
 #include "cdbus/timeout.h"
 #include "cdbus/object.h"
 #include "cdbus/interface.h"
+#include "cdbus/introspect.h"
+#include "cdbus/stringbuffer.h"
 
 #endif /* Guard for CDBUS_CDBUS_H_ */

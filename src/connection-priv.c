@@ -448,20 +448,14 @@ cdbus_connectionRegisterObject
                         cdbus_connectionObjectPathMsgHandler };
     DBusError dbusError;
     cdbus_ObjectConnBinding* binder;
-    cdbus_UInt32 pathSize = 0;
-    cdbus_Char* objPath;
 
     if ( (NULL != conn) && (NULL != obj) )
     {
         CDBUS_LOCK(conn->lock);
 
-        cdbus_objectGetPath(obj, NULL, &pathSize);
-
-        objPath = cdbus_malloc(pathSize);
         binder = cdbus_calloc(1, sizeof(*binder));
-        if ( (NULL == binder) || (NULL == objPath) )
+        if ( NULL == binder )
         {
-            cdbus_free(objPath);
             cdbus_free(binder);
         }
         else
@@ -470,11 +464,10 @@ cdbus_connectionRegisterObject
             cdbus_objectRef(obj);
             binder->conn = conn;
             cdbus_connectionRef(conn);
-            cdbus_objectGetPath(obj, objPath, &pathSize);
 
             dbus_error_init(&dbusError);
             if ( dbus_connection_try_register_object_path(conn->dbusConn,
-                objPath, &vTable, binder, &dbusError) )
+                cdbus_objectGetPath(obj), &vTable, binder, &dbusError) )
             {
                 isRegistered = CDBUS_TRUE;
             }
@@ -491,8 +484,6 @@ cdbus_connectionRegisterObject
                     dbus_error_free(&dbusError);
                 }
             }
-
-            cdbus_free(objPath);
         }
 
         CDBUS_UNLOCK(conn->lock);
