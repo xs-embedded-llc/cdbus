@@ -47,6 +47,7 @@ typedef enum {
     CDBUS_EC_NOT_FOUND,
     CDBUS_EC_CONNECTION_OPEN_FAILURE,
     CDBUS_EC_BUS_REG_ERROR,
+    CDBUS_EC_INSUFFICIENT_SPACE,
     CDBUS_EC_INTERNAL
 } cdbus_ErrorCode;
 
@@ -59,8 +60,8 @@ typedef enum {
             (((CODE) & 0xFFFFU)) \
         ))
 
-#define CDBUS_SUCCEEDED(R)      ((cdbus_HResult)(R) & (1U << 31))
-#define CDBUS_FAILED(R)         (!CDBUS_SUCCEEDED(R))
+#define CDBUS_FAILED(R)         ((cdbus_HResult)(R) & (1U << 31))
+#define CDBUS_SUCCEEDED(R)      (!CDBUS_FAILED(R))
 #define CDBUS_FACILITY(R)       (((cdbus_HResult)(R) >> 16U) & 0x7FFU)
 #define CDBUS_ERR_CODE(R)       ((cdbus_HResult)(R) & 0xFFFFU)
 #define CDBUS_SEVERITY(R)       (((cdbus_HResult)(R) >> 31U) & 0x1U)

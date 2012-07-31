@@ -48,7 +48,7 @@ CDBUS_EXPORT cdbus_Object* cdbus_objectNew(const cdbus_Char* objPath,
 CDBUS_EXPORT cdbus_Object* cdbus_objectRef(cdbus_Object* obj);
 CDBUS_EXPORT void cdbus_objectUnref(cdbus_Object* obj);
 
-CDBUS_EXPORT const cdbus_Char* cdbus_objectGetPath(cdbus_Object* obj);
+CDBUS_EXPORT cdbus_HResult cdbus_objectGetPath(cdbus_Object* obj, cdbus_Char* buf, cdbus_UInt32* size);
 CDBUS_EXPORT void cdbus_objectSetData(cdbus_Object* obj, void* data);
 CDBUS_EXPORT void* cdbus_objectGetData(cdbus_Object* obj);
 CDBUS_EXPORT cdbus_Bool cdbus_objectAddInterface(cdbus_Object* obj, struct cdbus_Interface* intf);

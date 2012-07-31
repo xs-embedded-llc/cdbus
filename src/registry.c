@@ -63,7 +63,7 @@ cdbus_registryNew
         reg->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
         if ( NULL != reg->lock )
         {
-            cdbus_registryRef(reg);
+            reg = cdbus_registryRef(reg);
         }
         else
         {
@@ -157,6 +157,7 @@ cdbus_registryAdd
                 item->value = value;
                 CDBUS_LOCK(reg->lock);
                 LIST_INSERT_HEAD(&reg->regItems, item, link);
+                added = CDBUS_TRUE;
                 CDBUS_UNLOCK(reg->lock);
             }
         }

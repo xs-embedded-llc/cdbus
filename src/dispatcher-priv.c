@@ -829,3 +829,102 @@ void cdbus_dispatcherWakeup
     }
 }
 
+
+cdbus_HResult
+cdbus_dispatcherRun
+    (
+    CDBUS_DISPATCHER_P,
+    cdbus_RunOption     runOpt
+    )
+{
+    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
+    cdbus_Int32 flag = 0;
+
+    if ( NULL == CDBUS_DISPATCHER_A )
+    {
+        rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                CDBUS_FAC_CDBUS,
+                                CDBUS_EC_INVALID_PARAMETER);
+    }
+    else
+    {
+        switch ( runOpt )
+        {
+            case CDBUS_RUN_WAIT:
+                flag = 0;
+                break;
+
+            case CDBUS_RUN_NO_WAIT:
+                flag = EVRUN_NOWAIT;
+                break;
+
+            case CDBUS_RUN_ONCE:
+                flag = EVRUN_ONCE;
+                break;
+
+            default:
+                rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                        CDBUS_FAC_CDBUS,
+                                        CDBUS_EC_INVALID_PARAMETER);
+                CDBUS_TRACE((CDBUS_TRC_ERROR, "Unknown run option (%d)"));
+                break;
+        }
+
+        if ( CDBUS_SUCCEEDED(rc) )
+        {
+            CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+            ev_run(CDBUS_DISPATCHER_LOOP_ flag);
+            CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        }
+    }
+
+    return rc;
+}
+
+
+cdbus_HResult
+cdbus_dispatcherBreak
+    (
+    CDBUS_DISPATCHER_P,
+    cdbus_BreakOption   opt
+    )
+{
+    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
+    cdbus_Int32 how = EVBREAK_ALL;
+
+    if ( NULL == CDBUS_DISPATCHER_A )
+    {
+        rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                CDBUS_FAC_CDBUS,
+                                CDBUS_EC_INVALID_PARAMETER);
+    }
+    else
+    {
+        if ( opt == CDBUS_BREAK_ALL )
+        {
+            how = EVBREAK_ALL;
+        }
+        else if ( opt == CDBUS_BREAK_ONE )
+        {
+            how = EVBREAK_ONE;
+        }
+        else
+        {
+            CDBUS_TRACE((CDBUS_TRC_ERROR, "Unknown break option (%d)"));
+            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                    CDBUS_FAC_CDBUS,
+                                    CDBUS_EC_INVALID_PARAMETER);
+        }
+
+
+        if ( CDBUS_SUCCEEDED(rc) )
+        {
+            CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+            ev_break(CDBUS_DISPATCHER_LOOP_ how);
+            CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        }
+    }
+
+    return rc;
+}
+

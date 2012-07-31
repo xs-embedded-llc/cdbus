@@ -24,6 +24,7 @@
  *******************************************************************************
  */
 #include <stddef.h>
+#include <string.h>
 #include <assert.h>
 #include "dbus/dbus.h"
 #include "interface-priv.h"
@@ -156,7 +157,7 @@ cdbus_interfaceNew
 {
     cdbus_Interface*    intf = NULL;
 
-    if ( NULL != name )
+    if ( (NULL != name) && (strlen(name) <= DBUS_MAXIMUM_NAME_LENGTH) )
     {
         intf = cdbus_calloc(1, sizeof(*intf));
         if ( NULL != intf )
@@ -223,7 +224,7 @@ void cdbus_interfaceUnref
            cdbus_interfaceFreeSignalList(intf);
            cdbus_interfaceFreePropertyList(intf);
 
-           CDBUS_UNLOCK(intf->lock)
+           CDBUS_UNLOCK(intf->lock);
            cdbus_mutexFree(intf->lock);
            cdbus_free(intf);
        }
@@ -592,5 +593,28 @@ cdbus_interfaceIntrospect
     }
 
     return sb;
+}
+
+
+DBusHandlerResult
+cdbus_interfaceHandleMessage
+    (
+    cdbus_Interface*    intf,
+    cdbus_Object*       obj,
+    cdbus_Connection*   conn,
+    DBusMessage*        msg
+    )
+{
+    DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    if ( (NULL != intf) &&
+        (NULL != obj) &&
+        (NULL != conn) &&
+        (NULL != msg) )
+    {
+        result = intf->handler(conn, obj, msg, intf->userData);
+    }
+
+
+    return result ;
 }
 

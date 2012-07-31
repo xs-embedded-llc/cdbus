@@ -29,7 +29,7 @@ all: libcdbus.so
 libcdbus.so: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc -L/usr/lib/x86_64-linux-gnu -shared -Wl,-soname=cdbus -o "libcdbus.so" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc -L/usr/lib/x86_64-linux-gnu -shared -Wl,-soname=libcdbus.so -o "libcdbus.so" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

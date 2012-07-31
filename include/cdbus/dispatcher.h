@@ -44,11 +44,37 @@ struct cdbus_Timeout;
 #define CDBUS_DISPATCHER_P  cdbus_Dispatcher* CDBUS_DISPATCHER_A
 #define CDBUS_DISPATCHER_P_  CDBUS_DISPATCHER_P,
 
+typedef enum
+{
+    /* Block continuously waiting for events */
+    CDBUS_RUN_WAIT,
+    /* Process outstanding events but don't block for new ones */
+    CDBUS_RUN_NO_WAIT,
+    /* Block waiting for events then return */
+    CDBUS_RUN_ONCE
+} cdbus_RunOption;
 
-CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(EV_P_ cdbus_Bool ownsLoop,
-                                  cdbus_WakeupFunc wakeupFunc, void* wakeupData);
+
+typedef enum
+{
+    /* Breaks all nested calls to the run loop */
+    CDBUS_BREAK_ALL,
+    /* Breaks only innermost nested run loop */
+    CDBUS_BREAK_ONE
+} cdbus_BreakOption;
+
+typedef void (*cdbus_WakeupFunc)(void*);
+
+
+CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(EV_P_
+                                        cdbus_Bool ownsLoop,
+                                        cdbus_WakeupFunc wakeupFunc,
+                                        void* wakeupData);
 CDBUS_EXPORT void cdbus_dispatcherUnref(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(CDBUS_DISPATCHER_P);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
+                                            cdbus_RunOption runOpt);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherBreak(CDBUS_DISPATCHER_P, cdbus_BreakOption opt);
 
 CDBUS_END_DECLS
 

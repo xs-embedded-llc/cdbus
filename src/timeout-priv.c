@@ -252,7 +252,7 @@ cdbus_timeoutEnable
                 }
             }
         }
-        CDBUS_UNLOCK(w->lock);
+        CDBUS_UNLOCK(t->lock);
     }
 
     return rc;
@@ -333,7 +333,7 @@ cdbus_timeoutSetInterval
             /* Directly update the internal since it's not running */
             ev_timer_set(&t->timerWatcher, 0.0, period);
         }
-        CDBUS_UNLOCK(w->lock);
+        CDBUS_UNLOCK(t->lock);
     }
 
     return rc;

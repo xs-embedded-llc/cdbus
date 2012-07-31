@@ -49,6 +49,8 @@ CDBUS_EXPORT cdbus_HResult cdbus_connectionClose(cdbus_Connection* conn);
 CDBUS_EXPORT DBusConnection* cdbus_connectionGetDBus(cdbus_Connection* conn);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionRegisterObject(cdbus_Connection* conn, cdbus_Object* obj);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionUnregisterObject(cdbus_Connection* conn, const cdbus_Char* path);
+CDBUS_EXPORT cdbus_Bool cdbus_connectionLock(cdbus_Connection* conn);
+CDBUS_EXPORT cdbus_Bool cdbus_connectionUnlock(cdbus_Connection* conn);
 
 
 

@@ -29,7 +29,7 @@ all: libcdbus.so
 libcdbus.so: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Cross GCC Linker'
-	arm-oe-linux-gnueabi-gcc -L/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib -shared -Wl,-soname=cdbus -o "libcdbus.so" $(OBJS) $(USER_OBJS) $(LIBS)
+	arm-oe-linux-gnueabi-gcc -L/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib -shared -Wl,-soname=libcdbus.so -o "libcdbus.so" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

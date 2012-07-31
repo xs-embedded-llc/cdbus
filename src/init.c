@@ -54,7 +54,7 @@ cdbus_HResult
 cdbus_initialize()
 {
     cdbus_HResult status = CDBUS_RESULT_SUCCESS;
-#include "cdbus/cdbus.h"
+
     /* We initialize "just in case" we want to use this library in a threaded environment */
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
     dbus_threads_init_default();

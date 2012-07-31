@@ -74,8 +74,6 @@ typedef struct cdbus_Atomic
 } cdbus_Atomic;
 
 
-typedef void (*cdbus_WakeupFunc)(void*);
-
 #ifndef CDBUS_FALSE
 #define CDBUS_FALSE     (0U)
 #endif

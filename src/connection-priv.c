@@ -391,6 +391,8 @@ cdbus_connectionClose
     }
     else
     {
+        CDBUS_LOCK(conn->lock);
+
         if ( conn->isPrivate )
         {
             dbus_connection_close(conn->dbusConn);
@@ -407,6 +409,8 @@ cdbus_connectionClose
              */
             rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
         }
+
+        CDBUS_UNLOCK(conn->lock);
     }
 
     return rc;
@@ -444,20 +448,33 @@ cdbus_connectionRegisterObject
                         cdbus_connectionObjectPathMsgHandler };
     DBusError dbusError;
     cdbus_ObjectConnBinding* binder;
+    cdbus_UInt32 pathSize = 0;
+    cdbus_Char* objPath;
 
     if ( (NULL != conn) && (NULL != obj) )
     {
+        CDBUS_LOCK(conn->lock);
+
+        cdbus_objectGetPath(obj, NULL, &pathSize);
+
+        objPath = cdbus_malloc(pathSize);
         binder = cdbus_calloc(1, sizeof(*binder));
-        if ( NULL != binder )
+        if ( (NULL == binder) || (NULL == objPath) )
+        {
+            cdbus_free(objPath);
+            cdbus_free(binder);
+        }
+        else
         {
             binder->obj = obj;
             cdbus_objectRef(obj);
             binder->conn = conn;
             cdbus_connectionRef(conn);
+            cdbus_objectGetPath(obj, objPath, &pathSize);
 
             dbus_error_init(&dbusError);
             if ( dbus_connection_try_register_object_path(conn->dbusConn,
-                cdbus_objectGetPath(obj), &vTable, binder, &dbusError) )
+                objPath, &vTable, binder, &dbusError) )
             {
                 isRegistered = CDBUS_TRUE;
             }
@@ -474,7 +491,11 @@ cdbus_connectionRegisterObject
                     dbus_error_free(&dbusError);
                 }
             }
+
+            cdbus_free(objPath);
         }
+
+        CDBUS_UNLOCK(conn->lock);
     }
 
     return isRegistered;
@@ -492,11 +513,45 @@ cdbus_connectionUnregisterObject
 
     if ( (NULL != conn) && (NULL != path) )
     {
+        CDBUS_LOCK(conn->lock);
+
         if ( dbus_connection_unregister_object_path(conn->dbusConn, path) )
         {
             isUnregistered = CDBUS_TRUE;
         }
+
+        CDBUS_UNLOCK(conn->lock);
     }
 
     return isUnregistered;
 }
+
+
+cdbus_Bool
+cdbus_connectionLock
+    (
+    cdbus_Connection*   conn
+    )
+{
+#ifdef CDBUS_ENABLE_THREAD_SUPPORT
+    return cdbus_mutexLock(conn->lock);
+#else
+    return CDBUS_TRUE;
+#endif
+}
+
+
+cdbus_Bool
+cdbus_connectionUnlock
+    (
+    cdbus_Connection*   conn
+    )
+{
+#ifdef CDBUS_ENABLE_THREAD_SUPPORT
+    return cdbus_mutexUnlock(conn->lock);
+#else
+    return CDBUS_TRUE;
+#endif
+}
+
+

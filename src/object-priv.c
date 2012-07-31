@@ -25,6 +25,7 @@
  */
 #include <string.h>
 #include <assert.h>
+#include "cdbus/error.h"
 #include "object-priv.h"
 #include "queue.h"
 #include "mutex.h"
@@ -137,22 +138,38 @@ void cdbus_objectUnref
 }
 
 
-const cdbus_Char*
+cdbus_HResult
 cdbus_objectGetPath
     (
-    cdbus_Object*   obj
+    cdbus_Object*   obj,
+    cdbus_Char*     buf,
+    cdbus_UInt32*   size
     )
 {
-    const cdbus_Char* path = NULL;
-
-    if ( NULL != obj )
+    cdbus_UInt32 available;
+    cdbus_HResult rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                            CDBUS_FAC_CDBUS,
+                                            CDBUS_EC_INVALID_PARAMETER);
+    if ( (NULL != obj) && (NULL != size) )
     {
         CDBUS_LOCK(obj->lock);
-        path = obj->objPath;
+        available = *size;
+        *size = (strlen(obj->objPath) + 1) * sizeof(cdbus_Char);
+        if ( (NULL != buf) && (available >= *size) )
+        {
+            memcpy(buf, obj->objPath, *size);
+            rc = CDBUS_RESULT_SUCCESS;
+        }
+        else
+        {
+            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                    CDBUS_FAC_CDBUS,
+                                    CDBUS_EC_INSUFFICIENT_SPACE);
+        }
         CDBUS_UNLOCK(obj->lock);
     }
 
-    return path;
+    return rc;
 }
 
 
