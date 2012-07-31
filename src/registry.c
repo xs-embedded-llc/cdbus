@@ -31,6 +31,7 @@
 #include "alloc.h"
 #include "mutex.h"
 #include "atomic-ops.h"
+#include "trace.h"
 
 struct cdbus_Registry
 {
@@ -64,6 +65,8 @@ cdbus_registryNew
         if ( NULL != reg->lock )
         {
             reg = cdbus_registryRef(reg);
+            CDBUS_TRACE((CDBUS_TRC_INFO,
+                  "Created a registry instance (%p)", (void*)reg));
         }
         else
         {
@@ -129,6 +132,8 @@ cdbus_registryUnref
             CDBUS_UNLOCK(reg->lock);
             cdbus_mutexFree(reg->lock);
             cdbus_free(reg);
+            CDBUS_TRACE((CDBUS_TRC_INFO,
+                              "Destroyed a registry instance (%p)", (void*)reg));
         }
     }
 }

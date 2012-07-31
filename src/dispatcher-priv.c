@@ -236,10 +236,10 @@ cdbus_runPendingHandlers
     CDBUS_DISPATCHER_P = (cdbus_Dispatcher*)arg;
 
     assert( NULL != CDBUS_DISPATCHER_A );
-    CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+    //CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
     ev_invoke_pending(CDBUS_DISPATCHER_LOOP);
-    CDBUS_CV_SIGNAL(CDBUS_DISPATCHER_A->cv);
-    CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+    //CDBUS_CV_SIGNAL(CDBUS_DISPATCHER_A->cv);
+    //CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
 }
 
 
@@ -265,7 +265,9 @@ cdbus_invokePending
         {
             /* Call the user supplied thread "wake up" function */
             CDBUS_DISPATCHER_A->wakeupFunc(CDBUS_DISPATCHER_A->wakeupData);
-            CDBUS_CV_WAIT(CDBUS_DISPATCHER_A->cv, CDBUS_DISPATCHER_A->lock);
+            //CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+            //CDBUS_CV_WAIT(CDBUS_DISPATCHER_A->cv, CDBUS_DISPATCHER_A->lock);
+            //CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
         }
     }
 }

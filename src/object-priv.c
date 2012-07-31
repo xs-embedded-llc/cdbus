@@ -30,6 +30,7 @@
 #include "queue.h"
 #include "mutex.h"
 #include "alloc.h"
+#include "trace.h"
 
 #define CDBUS_OBJECT_DEFAULT_INTROSPECT_CAPACITY    (512)
 #define CDBUS_INTROSPECT_HEADER "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\" \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"
@@ -58,6 +59,8 @@ cdbus_objectNew
             if ( (NULL != obj->lock) && (NULL != obj->objPath) )
             {
                 obj = cdbus_objectRef(obj);
+                CDBUS_TRACE((CDBUS_TRC_INFO,
+                      "Created an object instance (%p)", (void*)obj));
             }
             /* Else there was an error allocating the object */
             else
@@ -133,6 +136,8 @@ void cdbus_objectUnref
             CDBUS_UNLOCK(obj->lock);
             cdbus_mutexFree(obj->lock);
             cdbus_free(obj);
+            CDBUS_TRACE((CDBUS_TRC_INFO,
+                                  "Destroyed an object instance (%p)", (void*)obj));
         }
     }
 }

@@ -172,6 +172,8 @@ cdbus_interfaceNew
             if ( (NULL != intf->lock) && (NULL != intf->name) )
             {
                 cdbus_interfaceRef(intf);
+                CDBUS_TRACE((CDBUS_TRC_INFO,
+                             "Created an interface instance (%p)", (void*)intf));
             }
             else
             {
@@ -227,6 +229,8 @@ void cdbus_interfaceUnref
            CDBUS_UNLOCK(intf->lock);
            cdbus_mutexFree(intf->lock);
            cdbus_free(intf);
+           CDBUS_TRACE((CDBUS_TRC_INFO,
+                        "Destroyed teh interface instance (%p)", (void*)intf));
        }
     }
 }
