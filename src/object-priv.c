@@ -376,7 +376,7 @@ cdbus_objectIntrospect
         if ( NULL != sb )
         {
             cdbus_stringBufferAppendFormat(sb, "%s\n", CDBUS_INTROSPECT_HEADER);
-            cdbus_stringBufferAppendFormat(sb, "<node name=\"%s\">\n)", obj->objPath);
+            cdbus_stringBufferAppendFormat(sb, "<node name=\"%s\">\n", obj->objPath);
             if ( 0 == strcmp(path, obj->objPath) )
             {
                 LIST_FOREACH(intf, &obj->interfaces, link)
@@ -395,7 +395,7 @@ cdbus_objectIntrospect
                 idx = 0;
                 while ( (NULL != children) && (NULL != children[idx]) )
                 {
-                    cdbus_stringBufferAppendFormat(sb, "  <node name=\"%s\"/>\n)",
+                    cdbus_stringBufferAppendFormat(sb, "  <node name=\"%s\"/>\n",
                                                     children[idx]);
                     ++idx;
                 }
@@ -406,7 +406,7 @@ cdbus_objectIntrospect
                 }
             }
 
-            cdbus_stringBufferAppendFormat(sb, "</node>\n)");
+            cdbus_stringBufferAppendFormat(sb, "</node>\n");
         }
     }
 

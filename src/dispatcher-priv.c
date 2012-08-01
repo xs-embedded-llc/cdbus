@@ -511,8 +511,13 @@ cdbus_dispatcherAddConnection
             }
         }
 
-        /* If the connection isn't already in the list of connections then ... */
-        if ( curConn == LIST_END(&CDBUS_DISPATCHER_A->connections) )
+        /* If the connection is already in the list of connections then ... */
+        if ( curConn != LIST_END(&CDBUS_DISPATCHER_A->connections) )
+        {
+            status = CDBUS_RESULT_SUCCESS;
+        }
+        /* Else this connection doesn't exist in the list */
+        else
         {
             /* Every callback will own a reference to the connection so
              * that it's not inadvertently freed before these callbacks
@@ -523,7 +528,11 @@ cdbus_dispatcherAddConnection
             /* We only filter private connections looking for internally
              * generated disconnect signals
              */
-            if ( conn->isPrivate )
+            if ( !conn->isPrivate )
+            {
+                status = CDBUS_RESULT_SUCCESS;
+            }
+            else
             {
                 /* If we can't add the filter then ... */
                 if ( !dbus_connection_add_filter(
@@ -565,12 +574,15 @@ cdbus_dispatcherAddConnection
                                 cdbus_dbusWakeupDispatcher, conn,
                                 cdbus_releaseUserData);
 
+                if ( DBUS_DISPATCH_DATA_REMAINS ==
+                    dbus_connection_get_dispatch_status(cdbus_connectionGetDBus(conn)) )
+                {
+                    CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_TRUE;
+                }
                 cdbus_dispatcherWakeup(CDBUS_DISPATCHER_A);
             }
         }
         CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
-
-        status = CDBUS_RESULT_SUCCESS;
     }
 
     return status;

@@ -69,7 +69,7 @@ cdbus_introspectHandler
                 if ( NULL != replyMsg )
                 {
                     buf = cdbus_stringBufferRaw(sb);
-                    dbus_message_iter_init(replyMsg, &iter);
+                    dbus_message_iter_init_append(replyMsg, &iter);
                     if ( dbus_message_iter_append_basic(&iter,
                         DBUS_TYPE_STRING, &buf) )
                     {
