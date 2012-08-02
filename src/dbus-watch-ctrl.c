@@ -23,6 +23,7 @@
  * @brief          Definition of D-Bus related control functions.
  *******************************************************************************
  */
+#include <assert.h>
 #include "dbus-watch-ctrl.h"
 #include "trace.h"
 #include "alloc.h"
@@ -84,6 +85,8 @@ cdbus_watchAddHandler
     cdbus_Connection* conn = (cdbus_Connection*)data;
     cdbus_Int32 fd;
 
+    assert( NULL != conn );
+
     if ( NULL != dbusWatch )
     {
 #ifdef __linux__
@@ -97,23 +100,41 @@ cdbus_watchAddHandler
         if ( NULL != w )
         {
             dbus_watch_set_data(dbusWatch, w, cdbus_dbusFreeWatch);
-            rc = cdbus_watchEnable(w,
-                                dbus_watch_get_enabled(dbusWatch));
-            if ( CDBUS_SUCCEEDED(rc) )
+
+            rc = cdbus_dispatcherAddWatch(conn->dispatcher, w);
+
+            if ( !CDBUS_SUCCEEDED(rc) )
             {
-                added = TRUE;
+                CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add watch (0x%02x)", rc));
             }
             else
             {
-                CDBUS_TRACE((CDBUS_TRC_ERROR,
-                                    "Failed to enable watch (0x%02x)", rc));
-            }
+                rc = cdbus_watchEnable(w,
+                                    dbus_watch_get_enabled(dbusWatch));
+                if ( CDBUS_SUCCEEDED(rc) )
+                {
+                    added = TRUE;
+                }
+                else
+                {
+                    CDBUS_TRACE((CDBUS_TRC_ERROR,
+                            "Failed to enable watch (0x%02x)", rc));
 
-            /*
-             * On error enabling the watch the cdbus_dbusFreeWatch
-             * function *should* be called and unref the cdbus watch
-             * and thus free it up.
-             */
+                    /* Do best effort to remove the watch we just added */
+                    rc = cdbus_dispatcherRemoveWatch(conn->dispatcher, w);
+                    if( CDBUS_FAILED(rc) )
+                    {
+                        CDBUS_TRACE((CDBUS_TRC_ERROR,
+                            "Failed removing watch from dispatcher", rc));
+                    }
+                }
+
+                /*
+                 * On error enabling the watch the cdbus_dbusFreeWatch
+                 * function *should* be called and unref the cdbus watch
+                 * and thus free it up.
+                 */
+            }
         }
     }
     return added;
@@ -129,22 +150,28 @@ cdbus_watchRemoveHandler
 {
     cdbus_Watch* w = NULL;
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-    CDBUS_UNUSED(data);
+    cdbus_Connection* conn = (cdbus_Connection*)data;
+
+    assert( NULL != conn );
 
     if ( NULL != dbusWatch )
     {
         w = dbus_watch_get_data(dbusWatch);
         if ( NULL != w )
         {
-            /* Disabling the watch which effectively
-             * removes it from watches that are being
-             * managed.
-             */
             rc = cdbus_watchEnable(w, CDBUS_FALSE);
             if ( CDBUS_FAILED(rc) )
             {
                 CDBUS_TRACE((CDBUS_TRC_ERROR,
                     "Failed to disable the watch (0x%02x)", rc));
+            }
+
+            /* Remove the watch from the dispatcher */
+            rc = cdbus_dispatcherRemoveWatch(conn->dispatcher, w);
+            if( CDBUS_FAILED(rc) )
+            {
+                CDBUS_TRACE((CDBUS_TRC_ERROR,
+                    "Failed removing watch from dispatcher", rc));
             }
 
             /* When the D-Bus watch is destroyed it will also

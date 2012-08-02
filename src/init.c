@@ -30,22 +30,25 @@
 #include "cdbus/dispatcher.h"
 #include "dbus/dbus.h"
 #include "mutex.h"
-#include "registry.h"
+#include "pointer-pointer-map.h"
+#include "internal.h"
 
 
 /* Global Variables */
 cdbus_Mutex* cdbus_gAtomicOpLock = NULL;
-cdbus_Registry* cdbus_gDispatcherRegistry = NULL;
+cdbus_PtrPtrMap* cdbus_gDispatcherRegistry = NULL;
 
 static void
 cdbus_freeDispatcher
     (
-    void * d
+    void * key,
+    void * disp
     )
 {
-    if ( NULL != d )
+    CDBUS_UNUSED(key);
+    if ( NULL != disp )
     {
-        cdbus_dispatcherUnref(d);
+        cdbus_dispatcherUnref((cdbus_Dispatcher*)disp);
     }
 }
 
@@ -68,7 +71,7 @@ cdbus_initialize()
     }
     else
     {
-        cdbus_gDispatcherRegistry = cdbus_registryNew(cdbus_freeDispatcher);
+        cdbus_gDispatcherRegistry = cdbus_ptrPtrMapNew(cdbus_freeDispatcher);
         if ( NULL == cdbus_gDispatcherRegistry )
         {
             cdbus_mutexFree(cdbus_gAtomicOpLock);
@@ -92,7 +95,7 @@ cdbus_shutdown()
 
     if ( NULL != cdbus_gDispatcherRegistry )
     {
-        cdbus_registryUnref(cdbus_gDispatcherRegistry);
+        cdbus_ptrPtrMapUnref(cdbus_gDispatcherRegistry);
     }
 
     dbus_shutdown();

@@ -173,7 +173,7 @@ cdbus_interfaceNew
             {
                 cdbus_interfaceRef(intf);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
-                             "Created an interface instance (%p)", (void*)intf));
+                      "Created an interface instance (%p)", (void*)intf));
             }
             else
             {

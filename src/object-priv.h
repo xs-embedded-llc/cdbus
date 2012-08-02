@@ -27,7 +27,7 @@
 #include "cdbus/connection.h"
 #include "cdbus/object.h"
 #include "dbus/dbus.h"
-#include "queue.h"
+#include "string-pointer-map.h"
 #include "atomic-ops.h"
 #include "mutex.h"
 #include "interface-priv.h"
@@ -36,12 +36,12 @@ CDBUS_BEGIN_DECLS
 
 struct cdbus_Object
 {
-    cdbus_Char*                                     objPath;
-    void*                                           userData;
-    cdbus_Atomic                                    refCnt;
-    cdbus_Mutex*                                    lock;
-    LIST_HEAD(cdbus_InterfaceHead, cdbus_Interface) interfaces;
-    cdbus_ObjectMessageHandler                      handler;
+    cdbus_Char*                 objPath;
+    void*                       userData;
+    cdbus_Atomic                refCnt;
+    cdbus_Mutex*                lock;
+    cdbus_StrPtrMap*            interfaces;
+    cdbus_ObjectMessageHandler  handler;
 };
 
 DBusHandlerResult cdbus_objectMessageDispatcher(cdbus_Object* obj,

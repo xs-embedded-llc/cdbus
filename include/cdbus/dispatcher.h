@@ -63,7 +63,8 @@ typedef enum
     CDBUS_BREAK_ONE
 } cdbus_BreakOption;
 
-typedef void (*cdbus_WakeupFunc)(void*);
+
+typedef void (*cdbus_WakeupFunc)(CDBUS_DISPATCHER_P, void*);
 
 
 CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(EV_P_
@@ -75,6 +76,18 @@ CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
                                             cdbus_RunOption runOpt);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherBreak(CDBUS_DISPATCHER_P, cdbus_BreakOption opt);
+
+/* Only to be called from a secondary thread after the wakeup function has been called. */
+CDBUS_EXPORT void cdbus_dispatcherInvokePending(CDBUS_DISPATCHER_P);
+
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,
+                       struct cdbus_Watch* watch);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRemoveWatch(CDBUS_DISPATCHER_P,
+                       struct cdbus_Watch* watch);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherAddTimeout(CDBUS_DISPATCHER_P,
+                       struct cdbus_Timeout* timeout);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRemoveTimeout(CDBUS_DISPATCHER_P,
+                       struct cdbus_Timeout* timeout);
 
 CDBUS_END_DECLS
 

@@ -25,15 +25,31 @@
  */
 #include <string.h>
 #include <assert.h>
+#include "dbus/dbus.h"
 #include "cdbus/error.h"
 #include "object-priv.h"
-#include "queue.h"
 #include "mutex.h"
 #include "alloc.h"
 #include "trace.h"
+#include "internal.h"
 
 #define CDBUS_OBJECT_DEFAULT_INTROSPECT_CAPACITY    (512)
-#define CDBUS_INTROSPECT_HEADER "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\" \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">"
+
+
+static void
+cdbus_objFreeMapItem
+    (
+    cdbus_Char* name,
+    void*       item
+    )
+{
+    CDBUS_UNUSED(name);
+    if ( NULL != item )
+    {
+        cdbus_interfaceUnref((cdbus_Interface*)item);
+    }
+}
+
 
 cdbus_Object*
 cdbus_objectNew
@@ -50,13 +66,15 @@ cdbus_objectNew
         obj = cdbus_calloc(1, sizeof(*obj));
         if ( NULL != obj )
         {
-            LIST_INIT(&obj->interfaces);
+            obj->interfaces = cdbus_strPtrMapNew(cdbus_objFreeMapItem);
             obj->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
             obj->objPath = cdbus_strDup(objPath);
             obj->userData = userData;
             obj->handler = defaultHandler;
 
-            if ( (NULL != obj->lock) && (NULL != obj->objPath) )
+            if ( (NULL != obj->lock) &&
+                (NULL != obj->objPath) &&
+                (NULL != obj->interfaces))
             {
                 obj = cdbus_objectRef(obj);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
@@ -76,6 +94,11 @@ cdbus_objectNew
                 if ( NULL != obj->objPath )
                 {
                     cdbus_free(obj->objPath);
+                }
+
+                if ( NULL != obj->interfaces )
+                {
+                    cdbus_strPtrMapUnref(obj->interfaces);
                 }
 
                 cdbus_free(obj);
@@ -107,8 +130,6 @@ void cdbus_objectUnref
     cdbus_Object*   obj
     )
 {
-    cdbus_Interface* intf = NULL;
-    cdbus_Interface* nextIntf = NULL;
     cdbus_Int32 value = 0;
 
     if ( NULL != obj )
@@ -123,15 +144,7 @@ void cdbus_objectUnref
             /* Free up the resources */
 
             CDBUS_LOCK(obj->lock);
-            /* Loop through the values and free them */
-            for ( intf = LIST_FIRST(&obj->interfaces);
-                intf != LIST_END(&obj->interfaces);
-                intf = nextIntf )
-            {
-                nextIntf = LIST_NEXT(intf, link);
-                cdbus_interfaceUnref(intf);
-            }
-
+            cdbus_strPtrMapUnref(obj->interfaces);
             cdbus_free(obj->objPath);
             CDBUS_UNLOCK(obj->lock);
             cdbus_mutexFree(obj->lock);
@@ -238,26 +251,14 @@ cdbus_objectAddInterface
     )
 {
     cdbus_Bool  isAdded = CDBUS_FALSE;
-    cdbus_Interface* curIntf;
 
     if ( (NULL != obj) && (NULL != intf) )
     {
         CDBUS_LOCK(obj->lock);
-        /* Only add the interface if it doesn't already exist in the list */
-        LIST_FOREACH(curIntf, &obj->interfaces, link)
-        {
-            /* If the interface name already exists then ... */
-            if ( 0 == strcmp(cdbus_interfaceGetName(intf), cdbus_interfaceGetName(curIntf)) )
-            {
-                break;
-            }
-        }
 
-        /* If the interface isn't already in the list of interfaces then ... */
-        if ( curIntf == LIST_END(&obj->interfaces) )
+        if ( cdbus_strPtrMapAdd(obj->interfaces,
+            (cdbus_Char*)cdbus_interfaceGetName(intf), intf) )
         {
-            LIST_INSERT_HEAD(&obj->interfaces, intf, link);
-            /* The object now holds a reference to the interface */
             cdbus_interfaceRef(intf);
             isAdded = CDBUS_TRUE;
         }
@@ -276,25 +277,17 @@ cdbus_objectRemoveInterface
     )
 {
     cdbus_Bool  isRemoved = CDBUS_FALSE;
-    cdbus_Interface* curIntf;
+    cdbus_Interface* intf;
 
     if ( (NULL != obj) && (NULL != name) )
     {
         CDBUS_LOCK(obj->lock);
-        /* Only add the interface if it doesn't already exist in the list */
-        LIST_FOREACH(curIntf, &obj->interfaces, link)
+        intf = (cdbus_Interface*)cdbus_strPtrMapRemove(obj->interfaces, name);
+        if ( NULL != intf)
         {
-            /* If the interface name already exists then ... */
-            if ( 0 == strcmp(name, cdbus_interfaceGetName(curIntf)) )
-            {
-                LIST_REMOVE(curIntf, link);
-                /* The object now holds a reference to the interface */
-                cdbus_interfaceUnref(curIntf);
-                isRemoved = CDBUS_TRUE;
-                break;
-            }
+            cdbus_interfaceUnref(intf);
+            isRemoved = CDBUS_TRUE;
         }
-
         CDBUS_UNLOCK(obj->lock);
     }
 
@@ -322,22 +315,15 @@ cdbus_objectMessageDispatcher
          * it's present.
          */
         intfName = dbus_message_get_interface(msg);
+
         if ( NULL != intfName )
         {
-            /* Now let's scan the list of registered interfaces looking
-             * for a match.
-             */
-
-            LIST_FOREACH(curIntf, &obj->interfaces, link)
+            curIntf = (cdbus_Interface*)cdbus_strPtrMapGet(obj->interfaces, intfName);
+            if ( NULL != curIntf )
             {
-                /* If the interface name already exists then ... */
-                if ( 0 == strcmp(intfName, cdbus_interfaceGetName(curIntf)) )
-                {
-                    CDBUS_UNLOCK(obj->lock);
-                    result = cdbus_interfaceHandleMessage(curIntf, obj, conn, msg);
-                    CDBUS_LOCK(obj->lock);
-                    break;
-                }
+                CDBUS_UNLOCK(obj->lock);
+                result = cdbus_interfaceHandleMessage(curIntf, obj, conn, msg);
+                CDBUS_LOCK(obj->lock);
             }
         }
 
@@ -369,23 +355,31 @@ cdbus_objectIntrospect
     cdbus_Char** children = NULL;
     cdbus_Interface* intf;
     cdbus_UInt32 idx;
+    cdbus_StrPtrMapIter iter;
+    cdbus_Char* intfName;
 
     if ( NULL != obj )
     {
         sb = cdbus_stringBufferNew(CDBUS_OBJECT_DEFAULT_INTROSPECT_CAPACITY);
         if ( NULL != sb )
         {
-            cdbus_stringBufferAppendFormat(sb, "%s\n", CDBUS_INTROSPECT_HEADER);
+            cdbus_stringBufferAppendFormat(sb, "%s\n",
+                                        DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE);
             cdbus_stringBufferAppendFormat(sb, "<node name=\"%s\">\n", obj->objPath);
             if ( 0 == strcmp(path, obj->objPath) )
             {
-                LIST_FOREACH(intf, &obj->interfaces, link)
+                for ( cdbus_strPtrMapIterInit(obj->interfaces, &iter);
+                    !cdbus_strPtrMapIterIsEnd(&iter);
+                    cdbus_strPtrMapIterNext(&iter) )
                 {
-                    tmp = cdbus_interfaceIntrospect(intf);
-                    if ( NULL != tmp )
+                    if ( cdbus_strPtrMapIterGet(&iter, &intfName, &intf) )
                     {
-                        cdbus_stringBufferAppend(sb, cdbus_stringBufferRaw(tmp));
-                        cdbus_stringBufferUnref(tmp);
+                        tmp = cdbus_interfaceIntrospect(intf);
+                        if ( NULL != tmp )
+                        {
+                            cdbus_stringBufferAppend(sb, cdbus_stringBufferRaw(tmp));
+                            cdbus_stringBufferUnref(tmp);
+                        }
                     }
                 }
             }

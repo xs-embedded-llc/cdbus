@@ -57,6 +57,7 @@ cdbus_mutexNew
             mtx = cdbus_malloc(sizeof(*mtx));
             if ( NULL != mtx )
             {
+                mtx->count = 0;
                 rc = pthread_mutex_init(&mtx->m, &attr);
             }
         }
@@ -97,6 +98,10 @@ cdbus_mutexLock
     if ( NULL != mutex )
     {
         locked = (pthread_mutex_lock(&mutex->m) == 0);
+        if ( locked )
+        {
+            mutex->count++;
+        }
     }
 
     return locked;
@@ -114,10 +119,30 @@ cdbus_mutexUnlock
     if ( NULL != mutex )
     {
         unlocked = (pthread_mutex_unlock(&mutex->m) == 0);
+        if ( unlocked )
+        {
+            mutex->count--;
+        }
     }
 
     return unlocked;
 }
 
+
+cdbus_Int32
+cdbus_mutexCount
+    (
+    cdbus_Mutex*    mutex
+    )
+{
+    if ( NULL != mutex )
+    {
+        return mutex->count;
+    }
+    else
+    {
+        return 0;
+    }
+}
 
 

@@ -34,7 +34,7 @@
 #include "watch-priv.h"
 #include "timeout-priv.h"
 #include "mutex.h"
-#include "condvar.h"
+#include "semaphore.h"
 
 CDBUS_BEGIN_DECLS
 
@@ -51,9 +51,9 @@ struct cdbus_Dispatcher
     cdbus_Atomic                                refCnt;
     ev_async                                    asyncWatch;
     cdbus_Mutex*                                lock;
-    cdbus_CondVar*                              cv;
     cdbus_WakeupFunc                            wakeupFunc;
     void*                                       wakeupData;
+    cdbus_Semaphore*                            barrier;
     cdbus_Bool                                  dispatchNeeded;
 };
 
@@ -61,14 +61,6 @@ cdbus_HResult cdbus_dispatcherAddConnection(CDBUS_DISPATCHER_P,
                        struct cdbus_Connection* conn);
 cdbus_HResult cdbus_dispatcherRemoveConnection(CDBUS_DISPATCHER_P,
                        struct cdbus_Connection* conn);
-cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,
-                       struct cdbus_Watch* watch);
-cdbus_HResult cdbus_dispatcherRemoveWatch(CDBUS_DISPATCHER_P,
-                       struct cdbus_Watch* watch);
-cdbus_HResult cdbus_dispatcherAddTimeout(CDBUS_DISPATCHER_P,
-                       struct cdbus_Timeout* timeout);
-cdbus_HResult cdbus_dispatcherRemoveTimeout(CDBUS_DISPATCHER_P,
-                       struct cdbus_Timeout* timeout);
 void cdbus_dispatcherWakeup(cdbus_Dispatcher* d);
 
 

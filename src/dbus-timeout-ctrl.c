@@ -23,6 +23,7 @@
  * @brief          Definition of D-Bus related timeout control functions.
  *******************************************************************************
  */
+#include <assert.h>
 #include "dbus-timeout-ctrl.h"
 #include "trace.h"
 #include "alloc.h"
@@ -89,6 +90,8 @@ cdbus_timeoutAddHandler
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
     cdbus_Connection* conn = (cdbus_Connection*)data;
 
+    assert( NULL != conn );
+
     if ( NULL != dbusTimeout )
     {
         tm = cdbus_timeoutNew(conn->dispatcher,
@@ -98,16 +101,34 @@ cdbus_timeoutAddHandler
         if ( NULL != tm )
         {
             dbus_timeout_set_data(dbusTimeout, tm, cdbus_dbusFreeTimeout);
-            rc = cdbus_timeoutEnable(tm,
-                                dbus_timeout_get_enabled(dbusTimeout));
-            if ( CDBUS_SUCCEEDED(rc) )
+
+            rc = cdbus_dispatcherAddTimeout(conn->dispatcher, tm);
+
+            if ( !CDBUS_SUCCEEDED(rc) )
             {
-                added = TRUE;
+                CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add timeout (0x%02x)", rc));
             }
             else
             {
-                CDBUS_TRACE((CDBUS_TRC_ERROR,
-                                    "Failed to enable timeout (0x%02x)", rc));
+                rc = cdbus_timeoutEnable(tm,
+                                    dbus_timeout_get_enabled(dbusTimeout));
+                if ( CDBUS_SUCCEEDED(rc) )
+                {
+                    added = TRUE;
+                }
+                else
+                {
+                    CDBUS_TRACE((CDBUS_TRC_ERROR,
+                            "Failed to enable timeout (0x%02x)", rc));
+
+                    /* Do best effort to remove the timeout we just added */
+                    rc = cdbus_dispatcherRemoveTimeout(conn->dispatcher, tm);
+                    if( CDBUS_FAILED(rc) )
+                    {
+                        CDBUS_TRACE((CDBUS_TRC_ERROR,
+                            "Failed removing timeout from dispatcher", rc));
+                    }
+                }
             }
 
             /*
@@ -130,7 +151,9 @@ cdbus_timeoutRemoveHandler
 {
     cdbus_Timeout* tm = NULL;
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-    CDBUS_UNUSED(data);
+    cdbus_Connection* conn = (cdbus_Connection*)data;
+
+    assert( NULL != conn );
 
     if ( NULL != dbusTimeout )
     {
@@ -146,6 +169,14 @@ cdbus_timeoutRemoveHandler
             {
                 CDBUS_TRACE((CDBUS_TRC_ERROR,
                     "Failed to disable the timer (0x%02x)", rc));
+            }
+
+            /* Remove the timeout from the dispatcher */
+            rc = cdbus_dispatcherRemoveTimeout(conn->dispatcher, tm);
+            if( CDBUS_FAILED(rc) )
+            {
+                CDBUS_TRACE((CDBUS_TRC_ERROR,
+                    "Failed removing timeout from dispatcher", rc));
             }
 
             /* When the D-Bus timer is destroyed it will also

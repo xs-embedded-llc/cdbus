@@ -33,6 +33,14 @@
 #include "alloc.h"
 #include "trace.h"
 
+#if EV_MULTIPLICITY
+#define CDBUS_WATCH_LOOP    w->dispatcher->loop
+#define CDBUS_WATCH_LOOP_   CDBUS_WATCH_LOOP,
+#else
+#define CDBUS_WATCH_LOOP
+#define CDBUS_WATCH_LOOP_
+#endif
+
 static cdbus_UInt32
 cdbus_convertToEvFlags
     (
@@ -189,11 +197,7 @@ cdbus_watchUnref
             CDBUS_LOCK(w->lock);
             if ( ev_is_active(&w->ioWatcher) )
             {
-#if EV_MULTIPLICITY
-                ev_io_stop(w->dispatcher->EV_A, &w->ioWatcher);
-#else
-                ev_io_stop(&w->ioWatcher);
-#endif
+                ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
             }
             cdbus_dispatcherUnref(w->dispatcher);
             CDBUS_UNLOCK(w->lock);
@@ -340,12 +344,9 @@ cdbus_watchEnable
              */
             if ( !ev_is_active(&w->ioWatcher) )
             {
-                /* This has the side-effect of activating the watch */
-                rc = cdbus_dispatcherAddWatch(w->dispatcher, w);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add watch!"));
-                }
+                /* Start the watch */
+                ev_io_start(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+                cdbus_dispatcherWakeup(w->dispatcher);
             }
         }
         else
@@ -355,12 +356,9 @@ cdbus_watchEnable
              */
             if ( ev_is_active(&w->ioWatcher) )
             {
-                /* This will disable the watcher */
-                rc = cdbus_dispatcherRemoveWatch(w->dispatcher, w);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to remove watch!"));
-                }
+                /* Start the watch */
+                ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+                cdbus_dispatcherWakeup(w->dispatcher);
             }
         }
         CDBUS_UNLOCK(w->lock);

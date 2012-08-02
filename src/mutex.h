@@ -44,6 +44,7 @@ cdbus_Mutex* cdbus_mutexNew(cdbus_MutexOption opt);
 void cdbus_mutexFree(cdbus_Mutex* mutex);
 cdbus_Bool cdbus_mutexLock(cdbus_Mutex* mutex);
 cdbus_Bool cdbus_mutexUnlock(cdbus_Mutex* mutex);
+cdbus_Int32 cdbus_mutexCount(cdbus_Mutex* mutex);
 
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
 #define CDBUS_LOCK(X) cdbus_mutexLock(X)

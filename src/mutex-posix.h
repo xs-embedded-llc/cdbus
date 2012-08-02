@@ -36,6 +36,7 @@ CDBUS_BEGIN_DECLS
 struct cdbus_Mutex
 {
     pthread_mutex_t m;
+    cdbus_Int32 count;
 };
 
 CDBUS_END_DECLS

@@ -69,7 +69,6 @@ typedef struct cdbus_InterfaceProperty
 
 struct cdbus_Interface
 {
-    LIST_ENTRY(cdbus_Interface)     link;
     cdbus_Atomic                    refCnt;
     cdbus_Mutex*                    lock;
     cdbus_InterfaceMessageHandler   handler;

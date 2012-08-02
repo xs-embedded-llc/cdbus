@@ -37,6 +37,14 @@
 #include "alloc.h"
 #include "trace.h"
 
+#if EV_MULTIPLICITY
+#define CDBUS_TIMEOUT_LOOP    t->dispatcher->loop
+#define CDBUS_TIMEOUT_LOOP_   CDBUS_TIMEOUT_LOOP,
+#else
+#define CDBUS_TIMEOUT_LOOP
+#define CDBUS_TIMEOUT_LOOP_
+#endif
+
 static void
 cdbus_timerCallback
     (
@@ -159,11 +167,7 @@ cdbus_timeoutUnref
             CDBUS_LOCK(t->lock);
             if ( ev_is_active(&t->timerWatcher) )
             {
-#if EV_MULTIPLICITY
-                ev_timer_stop(t->dispatcher->EV_A, &t->timerWatcher);
-#else
-                ev_timer_stop(&t->timerWatcher);
-#endif
+                ev_timer_stop(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
             }
             cdbus_dispatcherUnref(t->dispatcher);
             CDBUS_UNLOCK(t->lock);
@@ -229,14 +233,11 @@ cdbus_timeoutEnable
              */
             if ( !ev_is_active(&t->timerWatcher) )
             {
-                /* This has the side-effect of activating the timer */
-                rc = cdbus_dispatcherAddTimeout(t->dispatcher, t);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add timeout!"));
-                }
+                ev_timer_again(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+                cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
+        /* Else disable the watcher */
         else
         {
             /* If the watch is currently active then
@@ -244,12 +245,8 @@ cdbus_timeoutEnable
              */
             if ( ev_is_active(&t->timerWatcher) )
             {
-                /* This will disable the watcher */
-                rc = cdbus_dispatcherRemoveTimeout(t->dispatcher, t);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to remove timeout!"));
-                }
+                ev_timer_stop(CDBUS_TIMEOUT_LOOP_  &t->timerWatcher);
+                cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
         CDBUS_UNLOCK(t->lock);

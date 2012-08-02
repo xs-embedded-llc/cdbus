@@ -29,7 +29,7 @@
 
 #include <stddef.h>
 #include "cdbus/types.h"
-#include "registry.h"
+#include "pointer-pointer-map.h"
 #include "mutex.h"
 
 
@@ -39,7 +39,7 @@
 
 /* Module-wide locks */
 extern cdbus_Mutex* cdbus_gAtomicOpLock;
-extern cdbus_Registry* cdbus_gDispatcherRegistry;
+extern cdbus_PtrPtrMap* cdbus_gDispatcherRegistry;
 
 
 #define CDBUS_UNUSED(X) (void)(X)
