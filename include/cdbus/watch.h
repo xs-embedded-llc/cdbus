@@ -42,12 +42,14 @@ CDBUS_EXPORT cdbus_Watch* cdbus_watchNew(struct cdbus_Dispatcher* dispatcher,
                                      cdbus_WatchHandler h, void* data);
 CDBUS_EXPORT cdbus_Watch* cdbus_watchRef(cdbus_Watch* w);
 CDBUS_EXPORT void cdbus_watchUnref(cdbus_Watch* w);
+CDBUS_EXPORT cdbus_Descriptor cdbus_watchGetDescriptor(cdbus_Watch* w);
 CDBUS_EXPORT cdbus_UInt32 cdbus_watchGetFlags(cdbus_Watch* w);
 CDBUS_EXPORT cdbus_HResult cdbus_watchSetFlags(cdbus_Watch* w, cdbus_UInt32 flags);
 CDBUS_EXPORT cdbus_Bool cdbus_watchIsEnabled(cdbus_Watch* w);
 CDBUS_EXPORT cdbus_HResult cdbus_watchEnable(cdbus_Watch* w, cdbus_Bool option);
 CDBUS_EXPORT void* cdbus_watchGetData(cdbus_Watch* w);
 CDBUS_EXPORT void cdbus_watchSetData(cdbus_Watch* w, void* data);
+CDBUS_EXPORT cdbus_UInt32 cdbus_watchClearPending(cdbus_Watch* w);
 
 
 CDBUS_END_DECLS

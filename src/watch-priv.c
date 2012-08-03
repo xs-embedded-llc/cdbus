@@ -54,12 +54,12 @@ cdbus_convertToEvFlags
 
     if ( dbusFlags & DBUS_WATCH_ERROR )
     {
-        evFlags |= (EV_READ | EV_WRITE);
+        evFlags |= EV_ERROR;
     }
 
     if ( dbusFlags & DBUS_WATCH_HANGUP )
     {
-        evFlags |= (EV_READ | EV_WRITE);
+        evFlags |= EV_CUSTOM | EV_ERROR;
     }
 
     return evFlags;
@@ -76,6 +76,8 @@ cdbus_convertToDbusFlags
 
     if ( evFlags & EV_READ ) dbusFlags |= DBUS_WATCH_READABLE;
     if ( evFlags & EV_WRITE ) dbusFlags |= DBUS_WATCH_WRITABLE;
+    if ( evFlags & EV_ERROR ) dbusFlags |= DBUS_WATCH_ERROR;
+    if ( evFlags & EV_CUSTOM ) dbusFlags |= DBUS_WATCH_HANGUP;
 
     return dbusFlags;
 }
@@ -210,6 +212,23 @@ cdbus_watchUnref
 }
 
 
+cdbus_Descriptor
+cdbus_watchGetDescriptor
+    (
+    cdbus_Watch*    w
+    )
+{
+    cdbus_Descriptor fd = -1;
+
+    if ( NULL != w )
+    {
+        fd = w->ioWatcher.fd;
+    }
+
+    return fd;
+}
+
+
 cdbus_UInt32
 cdbus_watchGetFlags
     (
@@ -256,25 +275,17 @@ cdbus_watchSetFlags
     else
     {
         CDBUS_LOCK(w->lock);
-        /* If the watch is active (and being managed by the dispatcher) then ... */
+        /* If the watch is active then ... */
         if ( ev_is_active(&w->ioWatcher) )
         {
             /* You can't change the flags of an active watcher */
-            rc = cdbus_dispatcherRemoveWatch(w->dispatcher, w);
-            if ( !CDBUS_SUCCEEDED(rc) )
-            {
-                CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to remove watch!"));
-            }
-            else
-            {
-                /* Change the flags and now re-install the watcher to enable it again */
-                ev_io_set(&w->ioWatcher, w->ioWatcher.fd, cdbus_convertToEvFlags(flags));
-                rc = cdbus_dispatcherAddWatch(w->dispatcher, w);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add watch!"));
-                }
-            }
+            ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+
+            /* Change the flags */
+            ev_io_set(&w->ioWatcher, w->ioWatcher.fd, cdbus_convertToEvFlags(flags));
+
+            /* Now start the watcher again */
+            ev_io_start(CDBUS_WATCH_LOOP_ &w->ioWatcher);
         }
         /* Else the watcher is not active and being managed */
         else
@@ -415,3 +426,11 @@ cdbus_watchSetData
 }
 
 
+cdbus_UInt32
+cdbus_watchClearPending
+    (
+    cdbus_Watch*    w
+    )
+{
+    return ev_clear_pending(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+}

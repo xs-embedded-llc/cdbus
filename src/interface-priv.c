@@ -230,7 +230,7 @@ void cdbus_interfaceUnref
            cdbus_mutexFree(intf->lock);
            cdbus_free(intf);
            CDBUS_TRACE((CDBUS_TRC_INFO,
-                        "Destroyed teh interface instance (%p)", (void*)intf));
+                        "Destroyed the interface instance (%p)", (void*)intf));
        }
     }
 }
