@@ -55,15 +55,6 @@ typedef enum
 } cdbus_RunOption;
 
 
-typedef enum
-{
-    /* Breaks all nested calls to the run loop */
-    CDBUS_BREAK_ALL,
-    /* Breaks only innermost nested run loop */
-    CDBUS_BREAK_ONE
-} cdbus_BreakOption;
-
-
 typedef void (*cdbus_WakeupFunc)(CDBUS_DISPATCHER_P, void*);
 
 
@@ -75,7 +66,7 @@ CDBUS_EXPORT void cdbus_dispatcherUnref(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
                                             cdbus_RunOption runOpt);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherBreak(CDBUS_DISPATCHER_P, cdbus_BreakOption opt);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
 
 /* Only to be called from a secondary thread after the wakeup function has been called. */
 CDBUS_EXPORT void cdbus_dispatcherInvokePending(CDBUS_DISPATCHER_P);

@@ -195,13 +195,16 @@ cdbus_stringBufferAppendN
         needed = len + sizeof(cdbus_Char);
         if ( needed > cdbus_stringBufferAvailable(sb) )
         {
-            if  ( needed < cdbus_growIfNeeded(sb,
-                needed * CDBUS_STRINGBUFFER_GROWTH_FACTOR) )
-            {
-                strncat(&sb->buf[sb->length], str, len);
-                sb->length += len;
-                nAppended = len;
-            }
+            cdbus_growIfNeeded(sb,
+                needed * CDBUS_STRINGBUFFER_GROWTH_FACTOR);
+
+        }
+
+        if ( needed <= cdbus_stringBufferAvailable(sb) )
+        {
+            strncat(&sb->buf[sb->length], str, len);
+            sb->length += len;
+            nAppended = len;
         }
     }
 
@@ -286,45 +289,50 @@ cdbus_stringBufferAppendFormat
     )
 {
     va_list args;
-    cdbus_UInt32 nWritten = 0;
+    cdbus_Int32 nWritten = 0;
     cdbus_UInt32 available;
+    cdbus_UInt32 newAvail;
 
     if ( (NULL != sb) && (NULL != fmt) )
     {
-        va_start(args, fmt);
-        available = cdbus_stringBufferAvailable(sb);
-        if ( 0 == available )
+        while ( CDBUS_TRUE )
         {
-            available = cdbus_growIfNeeded(sb, CDBUS_STRINGBUFFER_DEFAULT_SIZE);
-        }
-
-        if ( 0 < available )
-        {
+            available = cdbus_stringBufferAvailable(sb);
+            va_start(args, fmt);
             nWritten = vsnprintf(&sb->buf[sb->length], available, fmt, args);
-            if ( nWritten < available )
+            va_end(args);
+
+            if ( (nWritten > -1) && nWritten < available )
             {
                 sb->length += nWritten;
                 sb->buf[sb->length] = '\0';
+                break;
             }
             else
             {
                 /* Try to grow the buffer again to accommodate the string */
-                if ( nWritten < cdbus_growIfNeeded(sb,
-                    (nWritten + sizeof(cdbus_Char)) * CDBUS_STRINGBUFFER_GROWTH_FACTOR) )
+
+                /* If we're compiled with glibc 2.1 */
+                if ( nWritten > -1 )
                 {
-                    nWritten = vsnprintf(&sb->buf[sb->length], available, fmt, args);
-                    sb->length += nWritten;
+                    newAvail = cdbus_growIfNeeded(sb,
+                        (nWritten + sizeof(cdbus_Char)) *
+                         CDBUS_STRINGBUFFER_GROWTH_FACTOR);
                 }
+                /* Else glibc 2.0 behavior */
                 else
                 {
-                    nWritten = 0;
+                    newAvail = cdbus_growIfNeeded(sb, 2 * sb->capacity);
                 }
 
-                /* Always make sure it's NULL terminated */
-                sb->buf[sb->length] = '\0';
+                /* If we can't allocate more memory then ... */
+                if ( newAvail == available )
+                {
+                    nWritten = 0;
+                    break;
+                }
             }
         }
-        va_end(args);
     }
 
     return nWritten;

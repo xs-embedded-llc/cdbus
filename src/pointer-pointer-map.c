@@ -34,7 +34,7 @@
 
 typedef struct cdbus_PtrPtrMapNode
 {
-    cdbus_Char*     key;
+    void*           key;
     void*           value;
     UT_hash_handle  hh;
 } cdbus_PtrPtrMapNode;
@@ -190,7 +190,7 @@ cdbus_ptrPtrMapAdd
     if ( (NULL != map) && (NULL != key) && (NULL != value) )
     {
         /* We can't add items with duplicate keys */
-        HASH_FIND_PTR(map->items, key, node);
+        HASH_FIND_PTR(map->items, &key, node);
 
         /* If no match found then ... */
         if ( NULL == node )
@@ -200,7 +200,7 @@ cdbus_ptrPtrMapAdd
             {
                 node->key = key;
                 node->value = value;
-                HASH_ADD_PTR(map->items, hh, node);
+                HASH_ADD_PTR(map->items, key, node);
                 isAdded = CDBUS_TRUE;
             }
         }
@@ -222,7 +222,7 @@ cdbus_ptrPtrMapRemove
 
     if ( (NULL != map) && (NULL != key) )
     {
-        HASH_FIND_PTR(map->items, key, node);
+        HASH_FIND_PTR(map->items, &key, node);
         if ( NULL != node )
         {
             HASH_DEL(map->items, node);
@@ -247,7 +247,7 @@ cdbus_ptrPtrMapGet
 
     if ( (NULL != map) && (NULL != key) )
     {
-        HASH_FIND_PTR(map->items, key, node);
+        HASH_FIND_PTR(map->items, &key, node);
         if ( NULL != node )
         {
             value = node->value;
@@ -269,7 +269,7 @@ cdbus_ptrPtrMapExists
 
     if ( (NULL != map) && (NULL != key) )
     {
-        HASH_FIND_PTR(map->items, key, node);
+        HASH_FIND_PTR(map->items, &key, node);
     }
 
     return node != NULL;

@@ -32,6 +32,7 @@
 #include "mutex.h"
 #include "pointer-pointer-map.h"
 #include "internal.h"
+#include "trace.h"
 
 
 /* Global Variables */

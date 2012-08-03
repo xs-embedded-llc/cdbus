@@ -363,7 +363,7 @@ cdbus_objectIntrospect
         sb = cdbus_stringBufferNew(CDBUS_OBJECT_DEFAULT_INTROSPECT_CAPACITY);
         if ( NULL != sb )
         {
-            cdbus_stringBufferAppendFormat(sb, "%s\n",
+            cdbus_stringBufferAppendFormat(sb, "%s",
                                         DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE);
             cdbus_stringBufferAppendFormat(sb, "<node name=\"%s\">\n", obj->objPath);
             if ( 0 == strcmp(path, obj->objPath) )

@@ -162,6 +162,12 @@ cdbus_asyncCallback
                 status = dbus_connection_dispatch(conn->dbusConn);
             }
 
+            /* If the main loop is terminating then ... */
+            if ( CDBUS_DISPATCHER_A->exitLoop )
+            {
+                dbus_connection_flush(conn->dbusConn);
+            }
+
             if ( DBUS_DISPATCH_COMPLETE != status )
             {
                 /* It looks like we need to do more dispatching
@@ -340,6 +346,7 @@ cdbus_dispatcherNew
             CDBUS_DISPATCHER_LOOP = EV_A;
 #endif
             CDBUS_DISPATCHER_A->ownsLoop = ownsLoop;
+            CDBUS_DISPATCHER_A->exitLoop = CDBUS_FALSE;
             if ( NULL != wakeupFunc )
             {
                 CDBUS_DISPATCHER_A->wakeupFunc = wakeupFunc;
@@ -852,7 +859,10 @@ cdbus_dispatcherRun
         switch ( runOpt )
         {
             case CDBUS_RUN_WAIT:
-                flag = 0;
+                /* The do/while loop will effectively
+                 * implement this run option below.
+                 */
+                flag = EVRUN_ONCE;
                 break;
 
             case CDBUS_RUN_NO_WAIT:
@@ -873,9 +883,20 @@ cdbus_dispatcherRun
 
         if ( CDBUS_SUCCEEDED(rc) )
         {
-            CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-            ev_run(CDBUS_DISPATCHER_LOOP_ flag);
-            CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+            CDBUS_DISPATCHER_A->exitLoop = CDBUS_FALSE;
+            do
+            {
+                CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+                ev_run(CDBUS_DISPATCHER_LOOP_ flag);
+                CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+            }
+            while ( !CDBUS_DISPATCHER_A->exitLoop &&
+                (CDBUS_RUN_WAIT == runOpt) );
+
+            /* Keeps the state consistent now that the loop
+             * has exited.
+             */
+            CDBUS_DISPATCHER_A->exitLoop = CDBUS_TRUE;
         }
     }
 
@@ -884,49 +905,26 @@ cdbus_dispatcherRun
 
 
 cdbus_HResult
-cdbus_dispatcherBreak
+cdbus_dispatcherStop
     (
-    CDBUS_DISPATCHER_P,
-    cdbus_BreakOption   opt
+    CDBUS_DISPATCHER_P
     )
 {
-    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-    cdbus_Int32 how = EVBREAK_ALL;
+    /* This function purposely does not try to lock
+     * the dispatcher so that it is safe to be called
+     * from a signal handler. This may make it a little
+     * thread-unsafe so it shouldn't be called when another
+     * thread might be trying to destroy the dispatcher or
+     * start it running again.
+     */
+    CDBUS_DISPATCHER_A->exitLoop = CDBUS_TRUE;
+    /* Force the handler to scan through it's connections
+     * and flush everything.
+     */
+    CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_TRUE;
+    ev_async_send(CDBUS_DISPATCHER_LOOP_ &CDBUS_DISPATCHER_A->asyncWatch);
 
-    if ( NULL == CDBUS_DISPATCHER_A )
-    {
-        rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
-                                CDBUS_FAC_CDBUS,
-                                CDBUS_EC_INVALID_PARAMETER);
-    }
-    else
-    {
-        if ( opt == CDBUS_BREAK_ALL )
-        {
-            how = EVBREAK_ALL;
-        }
-        else if ( opt == CDBUS_BREAK_ONE )
-        {
-            how = EVBREAK_ONE;
-        }
-        else
-        {
-            CDBUS_TRACE((CDBUS_TRC_ERROR, "Unknown break option (%d)"));
-            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
-                                    CDBUS_FAC_CDBUS,
-                                    CDBUS_EC_INVALID_PARAMETER);
-        }
-
-
-        if ( CDBUS_SUCCEEDED(rc) )
-        {
-            CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-            ev_break(CDBUS_DISPATCHER_LOOP_ how);
-            CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
-        }
-    }
-
-    return rc;
+    return CDBUS_RESULT_SUCCESS;
 }
 
 

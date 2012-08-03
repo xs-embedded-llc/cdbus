@@ -55,6 +55,7 @@ struct cdbus_Dispatcher
     void*                                       wakeupData;
     cdbus_Semaphore*                            barrier;
     cdbus_Bool                                  dispatchNeeded;
+    volatile cdbus_Bool                         exitLoop;
 };
 
 cdbus_HResult cdbus_dispatcherAddConnection(CDBUS_DISPATCHER_P,
