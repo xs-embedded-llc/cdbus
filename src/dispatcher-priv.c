@@ -47,19 +47,6 @@
 
 #define CDBUS_DEFAULT_DISPATCH_LOOP   ((void*)ev_default_loop(0))
 
-static void
-cdbus_releaseUserData
-    (
-    void*   data
-    )
-{
-    cdbus_Connection* conn = (cdbus_Connection*)data;
-    if ( NULL != conn )
-    {
-        cdbus_connectionUnref(conn);
-    }
-}
-
 
 static DBusHandlerResult
 cdbus_connFilterHandler
@@ -425,6 +412,7 @@ cdbus_dispatcherUnref
     cdbus_Int32 value = 0;
     cdbus_Connection* conn = NULL;
     cdbus_Connection* nextConn = NULL;
+    void* mapValue = NULL;
 
     assert( NULL != CDBUS_DISPATCHER_A );
     if ( NULL != CDBUS_DISPATCHER_A )
@@ -446,6 +434,19 @@ cdbus_dispatcherUnref
                 nextConn = LIST_NEXT(conn, link);
                 cdbus_dispatcherRemoveConnection(CDBUS_DISPATCHER_A, conn);
             }
+
+            /* Remove the loop/dispatcher mapping from the global registry */
+            cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
+#if EV_MULTIPLICITY
+            mapValue = cdbus_ptrPtrMapRemove(cdbus_gDispatcherRegistry,
+                                            CDBUS_DISPATCHER_LOOP);
+#else
+            mapValue = cdbus_ptrPtrMapRemove(cdbus_gDispatcherRegistry,
+                                            CDBUS_DEFAULT_DISPATCH_LOOP);
+#endif
+            assert( mapValue == (void*)CDBUS_DISPATCHER_A);
+
+            cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
 
 #if EV_MULTIPLICITY
             /* Destroy the dispatcher itself */
@@ -471,9 +472,6 @@ cdbus_dispatcherUnref
                         ev_loop_destroy(CDBUS_DISPATCHER_LOOP);
                     }
                 }
-#if EV_MULTIPLICITY
-                CDBUS_DISPATCHER_LOOP = NULL;
-#endif
             }
 
             CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
@@ -503,6 +501,7 @@ cdbus_dispatcherRef
 
     return CDBUS_DISPATCHER_A;
 }
+
 
 cdbus_HResult
 cdbus_dispatcherAddConnection
@@ -555,8 +554,7 @@ cdbus_dispatcherAddConnection
                 /* If we can't add the filter then ... */
                 if ( !dbus_connection_add_filter(
                         cdbus_connectionGetDBus(conn),
-                        cdbus_connFilterHandler, conn,
-                        cdbus_releaseUserData) )
+                        cdbus_connFilterHandler, conn, NULL) )
                 {
                     status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                                 CDBUS_FAC_DBUS,
@@ -564,8 +562,7 @@ cdbus_dispatcherAddConnection
                 }
                 else
                 {
-                    /* Filter created so add a reference to the connection */
-                    cdbus_connectionRef(conn);
+                    status = CDBUS_RESULT_SUCCESS;
                 }
             }
 
@@ -578,19 +575,16 @@ cdbus_dispatcherAddConnection
                                 conn, link);
                 cdbus_connectionRef(conn);
 
-
-                cdbus_connectionRef(conn);
                 dbus_connection_set_dispatch_status_function(
                                 cdbus_connectionGetDBus(conn),
                                 cdbus_onDispatchStatusChange,
                                 conn,
-                                cdbus_releaseUserData);
+                                NULL /*cdbus_releaseUserData*/);
 
-                cdbus_connectionRef(conn);
                 dbus_connection_set_wakeup_main_function(
                                 cdbus_connectionGetDBus(conn),
                                 cdbus_dbusWakeupDispatcher, conn,
-                                cdbus_releaseUserData);
+                                NULL /*cdbus_releaseUserData*/);
 
                 if ( DBUS_DISPATCH_DATA_REMAINS ==
                     dbus_connection_get_dispatch_status(cdbus_connectionGetDBus(conn)) )
@@ -634,6 +628,18 @@ cdbus_dispatcherRemoveConnection
                         cdbus_connFilterHandler, curConn);
                 }
                 LIST_REMOVE(curConn, link);
+
+                /* We're no longer handling callbacks for this connection
+                 * so we'll NULL out the handlers
+                 */
+                dbus_connection_set_dispatch_status_function(
+                                cdbus_connectionGetDBus(conn),
+                                NULL, NULL, NULL);
+
+                dbus_connection_set_wakeup_main_function(
+                                cdbus_connectionGetDBus(conn),
+                                NULL, NULL, NULL);
+
                 cdbus_connectionUnref(conn);
                 status = CDBUS_RESULT_SUCCESS;
                 break;

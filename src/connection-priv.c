@@ -93,20 +93,6 @@ cdbus_connectionObjectPathUnregisterHandler
 }
 
 
-static void
-cdbus_freeSetFuncData
-    (
-    void*   data
-    )
-{
-    cdbus_Connection* conn = (cdbus_Connection*)data;
-    if ( NULL != conn )
-    {
-        cdbus_connectionUnref(conn);
-    }
-}
-
-
 cdbus_Connection*
 cdbus_connectionNew
     (
@@ -262,7 +248,7 @@ cdbus_connectionOpen
                                                   cdbus_timeoutRemoveHandler,
                                                   cdbus_timeoutToggleHandler,
                                                   conn,
-                                                  cdbus_freeSetFuncData);
+                                                  NULL);
             if ( !status )
             {
                 rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
@@ -270,24 +256,16 @@ cdbus_connectionOpen
             }
             else
             {
-                /* The timeout function handlers have a reference */
-                cdbus_connectionRef(conn);
-
                 status = dbus_connection_set_watch_functions(conn->dbusConn,
                                                     cdbus_watchAddHandler,
                                                     cdbus_watchRemoveHandler,
                                                     cdbus_watchToggleHandler,
                                                     conn,
-                                                    cdbus_freeSetFuncData);
+                                                    NULL);
                 if ( !status )
                 {
                     rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
                                             CDBUS_EC_ALLOC_FAILURE);
-                }
-                else
-                {
-                    /* The watch function handlers have a reference */
-                    cdbus_connectionRef(conn);
                 }
             }
 
@@ -404,10 +382,18 @@ cdbus_connectionClose
         }
         else
         {
+            /* Flush any outstanding messages if connected */
+            if ( dbus_connection_get_is_connected(conn->dbusConn) )
+            {
+                dbus_connection_flush(conn->dbusConn);
+            }
+
             /* We no longer want to monitor this connection. The
-             * user must still unreference it to free it however.
+             * user must still unreference it, however,  to free it completely.
              */
             rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
+            dbus_connection_unref(conn->dbusConn);
+            conn->dbusConn = NULL;
         }
 
         CDBUS_UNLOCK(conn->lock);
@@ -512,6 +498,11 @@ cdbus_connectionUnregisterObject
         }
 
         CDBUS_UNLOCK(conn->lock);
+
+        /*
+         * The connection is unreferenced when the unregister
+         * callback handler is invoked. No need to do it here.
+         */
     }
 
     return isUnregistered;

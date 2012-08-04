@@ -39,21 +39,6 @@
 cdbus_Mutex* cdbus_gAtomicOpLock = NULL;
 cdbus_PtrPtrMap* cdbus_gDispatcherRegistry = NULL;
 
-static void
-cdbus_freeDispatcher
-    (
-    void * key,
-    void * disp
-    )
-{
-    CDBUS_UNUSED(key);
-    if ( NULL != disp )
-    {
-        cdbus_dispatcherUnref((cdbus_Dispatcher*)disp);
-    }
-}
-
-
 cdbus_HResult
 cdbus_initialize()
 {
@@ -72,7 +57,7 @@ cdbus_initialize()
     }
     else
     {
-        cdbus_gDispatcherRegistry = cdbus_ptrPtrMapNew(cdbus_freeDispatcher);
+        cdbus_gDispatcherRegistry = cdbus_ptrPtrMapNew(NULL);
         if ( NULL == cdbus_gDispatcherRegistry )
         {
             cdbus_mutexFree(cdbus_gAtomicOpLock);
@@ -89,6 +74,8 @@ cdbus_initialize()
 cdbus_HResult
 cdbus_shutdown()
 {
+    dbus_shutdown();
+
     if ( NULL != cdbus_gAtomicOpLock )
     {
         cdbus_mutexFree(cdbus_gAtomicOpLock);
@@ -98,8 +85,6 @@ cdbus_shutdown()
     {
         cdbus_ptrPtrMapUnref(cdbus_gDispatcherRegistry);
     }
-
-    dbus_shutdown();
 
     return CDBUS_RESULT_SUCCESS;
 }

@@ -114,6 +114,10 @@ cdbus_timeoutAddHandler
                                     dbus_timeout_get_enabled(dbusTimeout));
                 if ( CDBUS_SUCCEEDED(rc) )
                 {
+                    /* Hold a reference to the connection while D-Bus is referencing
+                     * this timeout.
+                     */
+                    cdbus_connectionRef(conn);
                     added = TRUE;
                 }
                 else
@@ -128,6 +132,9 @@ cdbus_timeoutAddHandler
                         CDBUS_TRACE((CDBUS_TRC_ERROR,
                             "Failed removing timeout from dispatcher", rc));
                     }
+
+                    /* Failed to add the timeout - unreference the connection */
+                    cdbus_connectionUnref(conn);
                 }
             }
 
@@ -178,6 +185,11 @@ cdbus_timeoutRemoveHandler
                 CDBUS_TRACE((CDBUS_TRC_ERROR,
                     "Failed removing timeout from dispatcher", rc));
             }
+
+            /* Dispose of the connection since the timeout
+             * is not longer being referenced by D-Bus.
+             */
+            cdbus_connectionUnref(conn);
 
             /* When the D-Bus timer is destroyed it will also
              * unreference our timeout. No need to explicitly

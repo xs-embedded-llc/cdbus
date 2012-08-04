@@ -113,6 +113,10 @@ cdbus_watchAddHandler
                                     dbus_watch_get_enabled(dbusWatch));
                 if ( CDBUS_SUCCEEDED(rc) )
                 {
+                    /* Hold a reference to the connection while D-Bus is
+                     * using this watcher.
+                     */
+                    cdbus_connectionRef(conn);
                     added = TRUE;
                 }
                 else
@@ -127,6 +131,9 @@ cdbus_watchAddHandler
                         CDBUS_TRACE((CDBUS_TRC_ERROR,
                             "Failed removing watch from dispatcher", rc));
                     }
+                    /* Failed to add the watcher - unreference the connection */
+                    cdbus_connectionUnref(conn);
+
                 }
 
                 /*
@@ -173,6 +180,11 @@ cdbus_watchRemoveHandler
                 CDBUS_TRACE((CDBUS_TRC_ERROR,
                     "Failed removing watch from dispatcher", rc));
             }
+
+            /* Since the D-Bus library has disposed of the watcher
+             * we'll drop our connection.
+             */
+            cdbus_connectionUnref(conn);
 
             /* When the D-Bus watch is destroyed it will also
              * unreference our watch proxy. No need to explicitly
