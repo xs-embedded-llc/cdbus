@@ -56,7 +56,7 @@ void cdbus_traceMessage(cdbus_UInt32 level, struct DBusMessage* msg);
  *
  *          CDBUS_TRACE((CDBUS_TRC_DEBUG, "This value is %d", 1));
  */
-#ifdef DEBUG
+#ifdef TRACE
     #include <stdio.h>
 
     #ifdef linux

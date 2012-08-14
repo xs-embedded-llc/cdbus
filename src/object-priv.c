@@ -372,7 +372,7 @@ cdbus_objectIntrospect
                     !cdbus_strPtrMapIterIsEnd(&iter);
                     cdbus_strPtrMapIterNext(&iter) )
                 {
-                    if ( cdbus_strPtrMapIterGet(&iter, &intfName, &intf) )
+                    if ( cdbus_strPtrMapIterGet(&iter, &intfName, (void**)&intf) )
                     {
                         tmp = cdbus_interfaceIntrospect(intf);
                         if ( NULL != tmp )

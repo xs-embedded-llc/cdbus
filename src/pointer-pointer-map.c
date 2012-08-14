@@ -32,12 +32,12 @@
 #include "mutex.h"
 
 
-typedef struct cdbus_PtrPtrMapNode
+struct cdbus_PtrPtrMapNode
 {
     void*           key;
     void*           value;
     UT_hash_handle  hh;
-} cdbus_PtrPtrMapNode;
+};
 
 struct cdbus_PtrPtrMap
 {

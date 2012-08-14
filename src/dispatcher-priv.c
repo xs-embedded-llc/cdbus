@@ -169,7 +169,7 @@ cdbus_asyncCallback
          */
         if ( CDBUS_DISPATCHER_A->dispatchNeeded )
         {
-            /* Let's schedule another wakeup call */
+            /* Let's schedule another wake up call */
             cdbus_dispatcherWakeup(CDBUS_DISPATCHER_A);
         }
     }
@@ -196,6 +196,7 @@ cdbus_acquireDispatcherLock
     }
     else
     {
+        CDBUS_TRACE((CDBUS_TRC_INFO, "Acquiring dispatcher lock."));
         CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
     }
 }
@@ -220,6 +221,7 @@ cdbus_releaseDispatcherLock
     }
     else
     {
+        CDBUS_TRACE((CDBUS_TRC_INFO, "Releasing dispatcher lock."));
         CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
     }
 }
@@ -256,6 +258,7 @@ cdbus_invokePending
     }
     else
     {
+        CDBUS_TRACE((CDBUS_TRC_INFO, "Invoking registered wake-up function."));
         CDBUS_DISPATCHER_A->wakeupFunc(CDBUS_DISPATCHER_A, CDBUS_DISPATCHER_A->wakeupData);
 
         while ( ev_pending_count(CDBUS_DISPATCHER_LOOP) )
@@ -931,6 +934,17 @@ cdbus_dispatcherStop
     ev_async_send(CDBUS_DISPATCHER_LOOP_ &CDBUS_DISPATCHER_A->asyncWatch);
 
     return CDBUS_RESULT_SUCCESS;
+}
+
+
+void
+cdbus_dispatcherBreak
+    (
+    CDBUS_DISPATCHER_P
+    )
+{
+    cdbus_dispatcherStop(CDBUS_DISPATCHER_A);
+    ev_break(CDBUS_DISPATCHER_LOOP_ EVBREAK_ALL);
 }
 
 
