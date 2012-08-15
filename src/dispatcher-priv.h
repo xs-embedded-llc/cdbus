@@ -62,7 +62,9 @@ cdbus_HResult cdbus_dispatcherAddConnection(CDBUS_DISPATCHER_P,
                        struct cdbus_Connection* conn);
 cdbus_HResult cdbus_dispatcherRemoveConnection(CDBUS_DISPATCHER_P,
                        struct cdbus_Connection* conn);
-void cdbus_dispatcherWakeup(cdbus_Dispatcher* d);
+struct cdbus_Connection* cdbus_dispatcherGetDbusConnOwner(CDBUS_DISPATCHER_P,
+                                                DBusConnection* dbusConn);
+void cdbus_dispatcherWakeup(CDBUS_DISPATCHER_P);
 
 
 CDBUS_END_DECLS

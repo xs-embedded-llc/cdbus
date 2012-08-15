@@ -45,6 +45,10 @@ struct cdbus_Connection
 };
 
 
+cdbus_Connection* cdbus_connectionNew(struct cdbus_Dispatcher* disp,
+                                    DBusConnection* dbusConn,
+                                    cdbus_Bool isPrivate);
+
 CDBUS_END_DECLS
 
 #endif /* Guard for CDBUS_CONNECTION_PRIV_H_ */

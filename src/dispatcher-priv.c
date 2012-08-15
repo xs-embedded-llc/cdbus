@@ -670,6 +670,36 @@ cdbus_dispatcherRemoveConnection
 }
 
 
+struct cdbus_Connection*
+cdbus_dispatcherGetDbusConnOwner
+    (
+    CDBUS_DISPATCHER_P,
+    DBusConnection*     dbusConn
+    )
+{
+    cdbus_Connection* curConn = NULL;
+
+    if ( NULL != dbusConn )
+    {
+        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+        LIST_FOREACH(curConn, &CDBUS_DISPATCHER_A->connections, link)
+        {
+            if ( curConn->dbusConn == dbusConn )
+            {
+                break;
+            }
+        }
+
+        /* If a match is not found then curConn is NULL at
+         * the end of this loop
+         */
+        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+    }
+
+    return curConn;
+}
+
+
 cdbus_HResult
 cdbus_dispatcherAddWatch
     (

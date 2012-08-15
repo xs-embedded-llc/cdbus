@@ -72,7 +72,8 @@ cdbus_dbusFreeTimeout
     if ( NULL != timeout )
     {
         CDBUS_TRACE((CDBUS_TRC_INFO,
-            "Unreferencing timeout associate with D-Bus timeout"));
+            "Unreferencing timeout (%p) associated with D-Bus timeout",
+            (void*)timeout));
         cdbus_timeoutUnref(timeout);
     }
 }

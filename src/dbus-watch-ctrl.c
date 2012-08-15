@@ -66,7 +66,8 @@ cdbus_dbusFreeWatch
     if ( NULL != watch )
     {
         CDBUS_TRACE((CDBUS_TRC_INFO,
-            "Unreferencing watch associate with D-Bus watch"));
+            "Unreferencing watch (%p) associated with D-Bus watch",
+            (void*)watch));
         cdbus_watchUnref(watch);
     }
 }
@@ -109,6 +110,7 @@ cdbus_watchAddHandler
             }
             else
             {
+                CDBUS_TRACE((CDBUS_TRC_INFO, "Added watch (%p) to the dispatcher", w));
                 rc = cdbus_watchEnable(w,
                                     dbus_watch_get_enabled(dbusWatch));
                 if ( CDBUS_SUCCEEDED(rc) )
@@ -129,7 +131,8 @@ cdbus_watchAddHandler
                     if( CDBUS_FAILED(rc) )
                     {
                         CDBUS_TRACE((CDBUS_TRC_ERROR,
-                            "Failed removing watch from dispatcher", rc));
+                            "Failed removing watch (%p) from dispatcher (0x%02x)",
+                            (void*)w, rc));
                     }
                     /* Failed to add the watcher - unreference the connection */
                     cdbus_connectionUnref(conn);
@@ -178,7 +181,13 @@ cdbus_watchRemoveHandler
             if( CDBUS_FAILED(rc) )
             {
                 CDBUS_TRACE((CDBUS_TRC_ERROR,
-                    "Failed removing watch from dispatcher", rc));
+                    "Failed removing watch (%p) from dispatcher (0x%02x)",
+                    (void*)w, rc));
+            }
+            else
+            {
+                CDBUS_TRACE((CDBUS_TRC_INFO,
+                    "Removed watch (%p) from the dispatcher", w));
             }
 
             /* Since the D-Bus library has disposed of the watcher

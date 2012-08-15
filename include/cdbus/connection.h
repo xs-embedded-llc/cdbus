@@ -38,17 +38,21 @@ CDBUS_BEGIN_DECLS
 typedef struct cdbus_Connection cdbus_Connection;
 struct cdbus_Dispatcher;
 
-CDBUS_EXPORT cdbus_Connection* cdbus_connectionNew(struct cdbus_Dispatcher* disp);
-CDBUS_EXPORT void cdbus_connectionUnref(cdbus_Connection* conn);
-CDBUS_EXPORT cdbus_Connection* cdbus_connectionRef(cdbus_Connection* conn);
-CDBUS_EXPORT cdbus_HResult cdbus_connectionOpen(cdbus_Connection* conn, const cdbus_Char* address,
+CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpen(struct cdbus_Dispatcher* disp, const cdbus_Char* address,
                                                 cdbus_Bool private, cdbus_Bool exitOnDisconnect);
-CDBUS_EXPORT cdbus_HResult cdbus_connectionOpenStandard(cdbus_Connection* conn, DBusBusType busType,
+CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpenStandard(struct cdbus_Dispatcher* disp, DBusBusType busType,
                                                 cdbus_Bool private, cdbus_Bool exitOnDisconnect);
 CDBUS_EXPORT cdbus_HResult cdbus_connectionClose(cdbus_Connection* conn);
+CDBUS_EXPORT cdbus_Connection* cdbus_connectionRef(cdbus_Connection* conn);
+CDBUS_EXPORT void cdbus_connectionUnref(cdbus_Connection* conn);
 CDBUS_EXPORT DBusConnection* cdbus_connectionGetDBus(cdbus_Connection* conn);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionRegisterObject(cdbus_Connection* conn, cdbus_Object* obj);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionUnregisterObject(cdbus_Connection* conn, const cdbus_Char* path);
+CDBUS_EXPORT cdbus_Bool cdbus_connectionSendWithReply(cdbus_Connection* conn, DBusMessage* msg,
+                                                    DBusPendingCall** pending, cdbus_Int32 timeout,
+                                                    DBusPendingCallNotifyFunction  notifyFunc,
+                                                    void* userData, DBusFreeFunction freeUserDataFunc);
+
 CDBUS_EXPORT cdbus_Bool cdbus_connectionLock(cdbus_Connection* conn);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionUnlock(cdbus_Connection* conn);
 

@@ -96,7 +96,9 @@ cdbus_connectionObjectPathUnregisterHandler
 cdbus_Connection*
 cdbus_connectionNew
     (
-    struct cdbus_Dispatcher*    disp
+    struct cdbus_Dispatcher*    disp,
+    DBusConnection*             dbusConn,
+    cdbus_Bool                  isPrivate
     )
 {
     cdbus_Connection* conn = NULL;
@@ -117,8 +119,8 @@ cdbus_connectionNew
             {
                 conn->dispatcher = cdbus_dispatcherRef(disp);
                 assert( NULL != conn->dispatcher );
-                conn->dbusConn = NULL;
-                conn->isPrivate = CDBUS_FALSE;
+                conn->dbusConn = dbusConn;
+                conn->isPrivate = isPrivate;
                 cdbus_connectionRef(conn);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
                     "Created connection instance (%p)", (void*)conn));
@@ -193,10 +195,10 @@ cdbus_connectionRef
 }
 
 
-cdbus_HResult
+cdbus_Connection*
 cdbus_connectionOpen
     (
-    cdbus_Connection*   conn,
+    cdbus_Dispatcher*   disp,
     const cdbus_Char*   address,
     cdbus_Bool          private,
     cdbus_Bool          exitOnDisconnect
@@ -205,32 +207,24 @@ cdbus_connectionOpen
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
     DBusError dbusError;
     dbus_bool_t status;
+    cdbus_Connection* conn = NULL;
+    DBusConnection* dbusConn = NULL;
 
-    if ( (NULL == conn) || (NULL == address) )
-    {
-        rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
-                                CDBUS_FAC_CDBUS,
-                                CDBUS_EC_INVALID_PARAMETER);
-    }
-    else
+    if ( (NULL != disp) && (NULL != address) )
     {
         dbus_error_init(&dbusError);
 
-        CDBUS_LOCK(conn->lock);
-        conn->isPrivate = private;
         if ( private )
         {
-            conn->dbusConn = dbus_connection_open_private(address, &dbusError);
+            dbusConn = dbus_connection_open_private(address, &dbusError);
         }
         else
         {
-            conn->dbusConn = dbus_connection_open(address, &dbusError);
+            dbusConn = dbus_connection_open(address, &dbusError);
         }
 
-        if ( NULL == conn->dbusConn )
+        if ( NULL == dbusConn )
         {
-            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
-                                        CDBUS_EC_CONNECTION_OPEN_FAILURE);
             if ( dbus_error_is_set(&dbusError) )
             {
                 CDBUS_TRACE((CDBUS_TRC_ERROR, "%s : %s", dbusError.name,
@@ -240,87 +234,104 @@ cdbus_connectionOpen
         }
         else
         {
-            dbus_connection_set_exit_on_disconnect(conn->dbusConn,
-                                                    exitOnDisconnect);
-
-            status = dbus_connection_set_timeout_functions(conn->dbusConn,
-                                                  cdbus_timeoutAddHandler,
-                                                  cdbus_timeoutRemoveHandler,
-                                                  cdbus_timeoutToggleHandler,
-                                                  conn,
-                                                  NULL);
-            if ( !status )
+            /* See if there is already a (shared) connection that has the same
+             * underlying D-Bus connection.
+             */
+            conn = cdbus_dispatcherGetDbusConnOwner(disp, dbusConn);
+            if ( NULL != conn )
             {
-                rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
-                                        CDBUS_EC_ALLOC_FAILURE);
+                /* Just add a reference to an (already) existing connection */
+                conn = cdbus_connectionRef(conn);
             }
             else
             {
-                status = dbus_connection_set_watch_functions(conn->dbusConn,
-                                                    cdbus_watchAddHandler,
-                                                    cdbus_watchRemoveHandler,
-                                                    cdbus_watchToggleHandler,
-                                                    conn,
-                                                    NULL);
-                if ( !status )
+                conn = cdbus_connectionNew(disp, dbusConn, private);
+                if ( NULL != conn )
                 {
-                    rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
-                                            CDBUS_EC_ALLOC_FAILURE);
-                }
-            }
 
-            /* If there are no errors up to this point then ... */
-            if ( CDBUS_SUCCEEDED(rc) )
-            {
-                status = dbus_bus_register(conn->dbusConn, &dbusError);
-                if ( !status )
-                {
-                    rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
-                                            CDBUS_EC_BUS_REG_ERROR);
-                    if ( dbus_error_is_set(&dbusError) )
+                    dbus_connection_set_exit_on_disconnect(conn->dbusConn,
+                                                            exitOnDisconnect);
+
+                    status = dbus_connection_set_timeout_functions(conn->dbusConn,
+                                                          cdbus_timeoutAddHandler,
+                                                          cdbus_timeoutRemoveHandler,
+                                                          cdbus_timeoutToggleHandler,
+                                                          conn,
+                                                          NULL);
+                    if ( !status )
                     {
-                        CDBUS_TRACE((CDBUS_TRC_ERROR, "%s : %s", dbusError.name,
-                                     dbusError.message));
-                        dbus_error_free(&dbusError);
+                        rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
+                                                CDBUS_EC_ALLOC_FAILURE);
                     }
-                }
-                else
-                {
-                    rc = cdbus_dispatcherAddConnection(conn->dispatcher, conn);
+                    else
+                    {
+                        status = dbus_connection_set_watch_functions(conn->dbusConn,
+                                                            cdbus_watchAddHandler,
+                                                            cdbus_watchRemoveHandler,
+                                                            cdbus_watchToggleHandler,
+                                                            conn,
+                                                            NULL);
+                        if ( !status )
+                        {
+                            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
+                                                    CDBUS_EC_ALLOC_FAILURE);
+                        }
+                    }
+
+                    /* If there are no errors up to this point then ... */
+                    if ( CDBUS_SUCCEEDED(rc) )
+                    {
+                        status = dbus_bus_register(conn->dbusConn, &dbusError);
+                        if ( !status )
+                        {
+                            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE, CDBUS_FAC_DBUS,
+                                                    CDBUS_EC_BUS_REG_ERROR);
+                            if ( dbus_error_is_set(&dbusError) )
+                            {
+                                CDBUS_TRACE((CDBUS_TRC_ERROR, "%s : %s", dbusError.name,
+                                             dbusError.message));
+                                dbus_error_free(&dbusError);
+                            }
+                        }
+                        else
+                        {
+                            rc = cdbus_dispatcherAddConnection(conn->dispatcher, conn);
+                            if ( CDBUS_FAILED(rc) )
+                            {
+                                CDBUS_TRACE((CDBUS_TRC_ERROR,
+                                    "Failed adding connection to the dispatcher (0x%0X)", rc));
+                            }
+                        }
+                    }
+
                     if ( CDBUS_FAILED(rc) )
                     {
-                        CDBUS_TRACE((CDBUS_TRC_ERROR,
-                            "Failed adding connection to the dispatcher (0x%0X)", rc));
+                        if ( conn->isPrivate )
+                        {
+                            dbus_connection_close(conn->dbusConn);
+                        }
+                        cdbus_connectionUnref(conn);
+                        conn = NULL;
                     }
-                }
-            }
-
-            if ( CDBUS_FAILED(rc) )
-            {
-                if ( conn->isPrivate )
-                {
-                    dbus_connection_close(conn->dbusConn);
                 }
             }
         }
-
-        CDBUS_UNLOCK(conn->lock);
     }
 
-    return rc;
+    return conn;
 }
 
 
-cdbus_HResult
+cdbus_Connection*
 cdbus_connectionOpenStandard
     (
-    cdbus_Connection*   conn,
+    cdbus_Dispatcher*   disp,
     DBusBusType         busType,
     cdbus_Bool          private,
     cdbus_Bool          exitOnDisconnect
     )
 {
-    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
+    cdbus_Connection* conn = NULL;
     cdbus_Char* addr = NULL;
 
     switch( busType )
@@ -338,18 +349,15 @@ cdbus_connectionOpenStandard
             break;
 
         default:
-            rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
-                                    CDBUS_FAC_CDBUS,
-                                    CDBUS_EC_INVALID_PARAMETER);
             break;
     }
 
     if ( NULL != addr )
     {
-        rc = cdbus_connectionOpen(conn, addr, private, exitOnDisconnect);
+        conn = cdbus_connectionOpen(disp, addr, private, exitOnDisconnect);
     }
 
-    return rc;
+    return conn;
 }
 
 
@@ -373,7 +381,10 @@ cdbus_connectionClose
 
         if ( conn->isPrivate )
         {
-            dbus_connection_close(conn->dbusConn);
+            if ( dbus_connection_get_is_connected(conn->dbusConn) )
+            {
+                dbus_connection_close(conn->dbusConn);
+            }
 
             /* Once we get the internally generated disconnect
              * message we'll remove the connection from the dispatcher
@@ -506,6 +517,52 @@ cdbus_connectionUnregisterObject
     }
 
     return isUnregistered;
+}
+
+
+cdbus_Bool
+cdbus_connectionSendWithReply
+    (
+    cdbus_Connection*               conn,
+    DBusMessage*                    msg,
+    DBusPendingCall**               pending,
+    cdbus_Int32                     timeout,
+    DBusPendingCallNotifyFunction   notifyFunc,
+    void*                           userData,
+    DBusFreeFunction                freeUserDataFunc
+    )
+{
+    cdbus_Bool  sent = CDBUS_FALSE;
+    DBusPendingCall* localPending = NULL;
+
+    /* Initialize in case of error later */
+    if ( NULL != pending )
+    {
+        *pending = NULL;
+    }
+
+    CDBUS_LOCK(conn->lock);
+    if ( (NULL != conn ) && (NULL != msg) )
+    {
+        sent = dbus_connection_send_with_reply(conn->dbusConn, msg, &localPending, timeout);
+        if ( sent )
+        {
+            sent = dbus_pending_call_set_notify(localPending, notifyFunc,
+                                                userData, freeUserDataFunc);
+            if ( NULL != pending )
+            {
+                /* Hands off the reference count */
+                *pending = localPending;
+            }
+            else
+            {
+                dbus_pending_call_unref(localPending);
+            }
+        }
+    }
+    CDBUS_UNLOCK(conn->lock);
+
+    return sent;
 }
 
 
