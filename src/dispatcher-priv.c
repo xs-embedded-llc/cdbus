@@ -48,41 +48,6 @@
 #define CDBUS_DEFAULT_DISPATCH_LOOP   ((void*)ev_default_loop(0))
 
 
-static DBusHandlerResult
-cdbus_connFilterHandler
-    (
-    DBusConnection* dbusConn,
-    DBusMessage*    msg,
-    void*           data
-    )
-{
-    DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    cdbus_Connection* conn = (cdbus_Connection*)data;
-    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-
-    if ( dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
-        dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
-    {
-        if ( NULL != conn )
-        {
-            /* Only private connections should have filters
-             * associated with them.
-             */
-            assert( conn->isPrivate );
-            rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
-            if ( CDBUS_FAILED(rc) )
-            {
-                CDBUS_TRACE((CDBUS_TRC_ERROR,
-                       "Failed to remove the connection (rc=0x%02X)", rc));
-            }
-            result = DBUS_HANDLER_RESULT_HANDLED;
-        }
-    }
-
-    return result;
-}
-
-
 static void
 cdbus_onDispatchStatusChange
     (
@@ -557,7 +522,7 @@ cdbus_dispatcherAddConnection
                 /* If we can't add the filter then ... */
                 if ( !dbus_connection_add_filter(
                         cdbus_connectionGetDBus(conn),
-                        cdbus_connFilterHandler, conn, NULL) )
+                        cdbus_connectionFilterHandler, conn, NULL) )
                 {
                     status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                                 CDBUS_FAC_DBUS,
@@ -628,7 +593,7 @@ cdbus_dispatcherRemoveConnection
                 {
                     dbus_connection_remove_filter(
                         cdbus_connectionGetDBus(curConn),
-                        cdbus_connFilterHandler, curConn);
+                        cdbus_connectionFilterHandler, curConn);
                 }
                 LIST_REMOVE(curConn, link);
 

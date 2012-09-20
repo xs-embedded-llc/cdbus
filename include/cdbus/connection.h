@@ -38,6 +38,33 @@ CDBUS_BEGIN_DECLS
 typedef struct cdbus_Connection cdbus_Connection;
 struct cdbus_Dispatcher;
 
+typedef enum {
+    CDBUS_FILTER_ARG_INVALID = 0,
+    CDBUS_FILTER_ARG = 1,
+    CDBUS_FILTER_ARG_PATH = 2,
+} cdbus_FilterArgType;
+
+typedef struct cdbus_FilterArgItem
+{
+    cdbus_FilterArgType argType;
+    cdbus_UInt8         argN;
+    cdbus_Char*         value;
+} cdbus_FilterArgItem;
+
+typedef struct cdbus_SignalRule
+{
+    cdbus_Char* signalName;
+    cdbus_Char* objInterface;
+    cdbus_Char* sender;
+    cdbus_Char* path;
+    cdbus_Bool treatPathAsNamespace;
+    cdbus_Char* arg0Namespace;
+    cdbus_FilterArgItem* filterArgs;
+    cdbus_UInt16 nFilterArgs;
+} cdbus_SignalRule;
+
+typedef void (*cdbus_connectionSignalHandler)(cdbus_Connection* conn, cdbus_Handle hnd , DBusMessage*, void* userData);
+
 CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpen(struct cdbus_Dispatcher* disp, const cdbus_Char* address,
                                                 cdbus_Bool private, cdbus_Bool exitOnDisconnect);
 CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpenStandard(struct cdbus_Dispatcher* disp, DBusBusType busType,
@@ -52,6 +79,16 @@ CDBUS_EXPORT cdbus_Bool cdbus_connectionSendWithReply(cdbus_Connection* conn, DB
                                                     DBusPendingCall** pending, cdbus_Int32 timeout,
                                                     DBusPendingCallNotifyFunction  notifyFunc,
                                                     void* userData, DBusFreeFunction freeUserDataFunc);
+
+CDBUS_EXPORT cdbus_Handle cdbus_connectionRegisterSignalHandler(
+                                                    cdbus_Connection* conn,
+                                                    cdbus_connectionSignalHandler handler,
+                                                    void* userData,
+                                                    const cdbus_SignalRule* rule,
+                                                    cdbus_HResult* hResult);
+CDBUS_EXPORT cdbus_HResult cdbus_connectionUnregisterSignalHandler(
+                                                    cdbus_Connection* conn,
+                                                    cdbus_Handle regHnd);
 
 CDBUS_EXPORT cdbus_Bool cdbus_connectionLock(cdbus_Connection* conn);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionUnlock(cdbus_Connection* conn);

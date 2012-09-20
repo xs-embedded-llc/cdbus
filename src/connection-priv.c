@@ -37,6 +37,7 @@
 #include "dbus-watch-ctrl.h"
 #include "dbus-timeout-ctrl.h"
 #include "internal.h"
+#include "signal-match.h"
 
 typedef struct cdbus_ObjectConnBinding
 {
@@ -121,6 +122,8 @@ cdbus_connectionNew
                 assert( NULL != conn->dispatcher );
                 conn->dbusConn = dbusConn;
                 conn->isPrivate = isPrivate;
+                LIST_INIT(&conn->sigMatches);
+                conn->nextSigMatch = LIST_END(&conn->sigMatches);
                 cdbus_connectionRef(conn);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
                     "Created connection instance (%p)", (void*)conn));
@@ -132,6 +135,49 @@ cdbus_connectionNew
 }
 
 
+DBusHandlerResult
+cdbus_connectionFilterHandler
+    (
+    DBusConnection* dbusConn,
+    DBusMessage*    msg,
+    void*           data
+    )
+{
+    DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    cdbus_Connection* conn = (cdbus_Connection*)data;
+    cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
+
+    if ( DBUS_MESSAGE_TYPE_SIGNAL == dbus_message_get_type(msg) )
+    {
+        if ( dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
+            dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
+        {
+            if ( NULL != conn )
+            {
+                /* Only private connections should have filters
+                 * associated with them.
+                 */
+                assert( conn->isPrivate );
+                rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
+                if ( CDBUS_FAILED(rc) )
+                {
+                    CDBUS_TRACE((CDBUS_TRC_ERROR,
+                           "Failed to remove the connection (rc=0x%02X)", rc));
+                }
+                result = DBUS_HANDLER_RESULT_HANDLED;
+            }
+        }
+        else
+        {
+            /* Dispatch the message to any registered handlers */
+            result = cdbus_connectionDispatchSignalMatches(conn, msg);
+        }
+    }
+
+    return result;
+}
+
+
 void
 cdbus_connectionUnref
     (
@@ -139,6 +185,8 @@ cdbus_connectionUnref
     )
 {
     cdbus_Int32 value;
+    cdbus_SignalMatch* sigMatch;
+
     assert( NULL != conn );
     if ( NULL != conn )
     {
@@ -168,6 +216,15 @@ cdbus_connectionUnref
                  * a shared one since we always add a reference when it's created.
                  */
                 dbus_connection_unref(conn->dbusConn);
+            }
+
+            /* Loop through any signal filter matches we have and dispose of them */
+            for ( sigMatch = LIST_FIRST(&conn->sigMatches);
+                sigMatch != LIST_END(&conn->sigMatches);
+                sigMatch = conn->nextSigMatch )
+            {
+                conn->nextSigMatch = LIST_NEXT(sigMatch, link);
+                cdbus_signalMatchUnref(sigMatch);
             }
 
             cdbus_dispatcherUnref(conn->dispatcher);
@@ -594,3 +651,161 @@ cdbus_connectionUnlock
 }
 
 
+cdbus_Handle
+cdbus_connectionRegisterSignalHandler
+    (
+    cdbus_Connection*               conn,
+    cdbus_connectionSignalHandler   handler,
+    void*                           userData,
+    const cdbus_SignalRule*         rule,
+    cdbus_HResult*                  hResult
+    )
+{
+   cdbus_Handle hnd = CDBUS_INVALID_HANDLE;
+   cdbus_HResult result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                               CDBUS_FAC_CDBUS,
+                                               CDBUS_EC_INTERNAL);
+   cdbus_SignalMatch* sigMatch = NULL;
+
+   if ( (NULL == conn) || (NULL == handler) )
+   {
+       result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                   CDBUS_FAC_CDBUS,
+                                   CDBUS_EC_INVALID_PARAMETER);
+   }
+   else
+   {
+       CDBUS_LOCK(conn->lock);
+       sigMatch = cdbus_signalMatchNew(handler, userData, rule);
+       if ( NULL == sigMatch )
+       {
+           result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                      CDBUS_FAC_CDBUS,
+                                      CDBUS_EC_ALLOC_FAILURE);
+       }
+
+       if ( NULL != sigMatch )
+       {
+           if ( cdbus_signalMatchAddFilter(sigMatch, conn) )
+           {
+               LIST_INSERT_HEAD(&conn->sigMatches, sigMatch, link);
+               result = CDBUS_RESULT_SUCCESS;
+               hnd = sigMatch;
+           }
+           else
+           {
+               cdbus_signalMatchUnref(sigMatch);
+               result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                           CDBUS_FAC_CDBUS,
+                                           CDBUS_EC_FILTER_ERROR);
+           }
+       }
+       CDBUS_UNLOCK(conn->lock);
+   }
+
+
+   if ( NULL != hResult )
+   {
+       *hResult = result;
+   }
+
+   return hnd;
+}
+
+
+cdbus_HResult
+cdbus_connectionUnregisterSignalHandler
+    (
+    cdbus_Connection*   conn,
+    cdbus_Handle        regHnd
+    )
+{
+    cdbus_HResult result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                                CDBUS_FAC_CDBUS,
+                                                CDBUS_EC_NOT_FOUND);
+    cdbus_SignalMatch* sigMatch = NULL;
+
+    if ( (NULL == conn) || (CDBUS_INVALID_HANDLE == regHnd) )
+    {
+        result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                    CDBUS_FAC_CDBUS,
+                                    CDBUS_EC_INVALID_PARAMETER);
+    }
+    else
+    {
+        CDBUS_LOCK(conn->lock);
+
+        /* Find the registered signal match and remove it */
+        LIST_FOREACH(sigMatch, &conn->sigMatches, link)
+        {
+            if ( (cdbus_SignalMatch*)regHnd == sigMatch )
+            {
+                /* If this function was called from a signal handler
+                 * callback and we're trying to unregister the our
+                 * "next" handler to call then bump it forward.
+                 */
+                if ( sigMatch == conn->nextSigMatch )
+                {
+                    conn->nextSigMatch = LIST_NEXT(sigMatch, link);
+                }
+                LIST_REMOVE(sigMatch, link);
+                if ( cdbus_signalMatchRemoveFilter(sigMatch, conn) )
+                {
+                    result = CDBUS_RESULT_SUCCESS;
+                }
+                else
+                {
+                    result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                               CDBUS_FAC_CDBUS,
+                                               CDBUS_EC_FILTER_ERROR);
+                }
+                cdbus_signalMatchUnref(sigMatch);
+                break;
+            }
+        }
+        CDBUS_UNLOCK(conn->lock);
+    }
+
+    return result;
+}
+
+
+DBusHandlerResult
+cdbus_connectionDispatchSignalMatches
+    (
+    cdbus_Connection*   conn,
+    DBusMessage*        msg
+    )
+{
+    DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    cdbus_SignalMatch* sigMatch;
+
+    if ( (NULL != conn) && (NULL != msg) )
+    {
+        CDBUS_LOCK(conn->lock);
+
+        for ( sigMatch = LIST_FIRST(&conn->sigMatches);
+            sigMatch != LIST_END(&conn->sigMatches);
+            sigMatch = conn->nextSigMatch )
+        {
+            conn->nextSigMatch = LIST_NEXT(sigMatch, link);
+            if ( cdbus_signalMatchIsMatch(sigMatch, msg) )
+            {
+                /* Add a reference in case the handler tries to
+                 * unregister the same handler.
+                 */
+                cdbus_signalMatchRef(sigMatch);
+                CDBUS_UNLOCK(conn->lock);
+                cdbus_signalMatchDispatch(conn, sigMatch, msg);
+                CDBUS_LOCK(conn->lock);
+                cdbus_signalMatchUnref(sigMatch);
+                result = DBUS_HANDLER_RESULT_HANDLED;
+            }
+            cdbus_signalMatchUnref(sigMatch);
+            conn->nextSigMatch = LIST_END(&conn->sigMatches);
+        }
+        CDBUS_UNLOCK(conn->lock);
+    }
+
+    return result;
+}

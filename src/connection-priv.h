@@ -30,6 +30,7 @@
 #include "cdbus/cdbus.h"
 #include "queue.h"
 #include "mutex.h"
+#include "signal-match.h"
 
 CDBUS_BEGIN_DECLS
 
@@ -39,7 +40,10 @@ struct cdbus_Connection
     cdbus_Dispatcher*               dispatcher;
     DBusConnection*                 dbusConn;
     cdbus_Bool                      isPrivate;
+    cdbus_SignalMatch*              nextSigMatch;
     cdbus_Atomic                    refCnt;
+    LIST_HEAD(cdbus_SigMatchHead,
+              cdbus_SignalMatch)    sigMatches;
     cdbus_Mutex*                    lock;
     LIST_ENTRY(cdbus_Connection)    link;
 };
@@ -48,6 +52,12 @@ struct cdbus_Connection
 cdbus_Connection* cdbus_connectionNew(struct cdbus_Dispatcher* disp,
                                     DBusConnection* dbusConn,
                                     cdbus_Bool isPrivate);
+
+DBusHandlerResult cdbus_connectionFilterHandler(DBusConnection* dbusConn,
+                         DBusMessage* msg, void* data);
+
+DBusHandlerResult cdbus_connectionDispatchSignalMatches(cdbus_Connection* conn,
+                                                         DBusMessage* msg);
 
 CDBUS_END_DECLS
 
