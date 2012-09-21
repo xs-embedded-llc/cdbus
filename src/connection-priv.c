@@ -149,15 +149,16 @@ cdbus_connectionFilterHandler
 
     if ( DBUS_MESSAGE_TYPE_SIGNAL == dbus_message_get_type(msg) )
     {
-        if ( dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
-            dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
+        if ( NULL != conn )
         {
-            if ( NULL != conn )
+            /* Only for private connections do you have to look
+             * for the Disconnect signal before finalizing the
+             * connection.
+             */
+            if ( conn->isPrivate &&
+                dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
+                dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
             {
-                /* Only private connections should have filters
-                 * associated with them.
-                 */
-                assert( conn->isPrivate );
                 rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
                 if ( CDBUS_FAILED(rc) )
                 {
@@ -166,11 +167,11 @@ cdbus_connectionFilterHandler
                 }
                 result = DBUS_HANDLER_RESULT_HANDLED;
             }
-        }
-        else
-        {
-            /* Dispatch the message to any registered handlers */
-            result = cdbus_connectionDispatchSignalMatches(conn, msg);
+            else
+            {
+                /* Dispatch the message to any registered handlers */
+                result = cdbus_connectionDispatchSignalMatches(conn, msg);
+            }
         }
     }
 
@@ -652,7 +653,7 @@ cdbus_connectionUnlock
 
 
 cdbus_Handle
-cdbus_connectionRegisterSignalHandler
+cdbus_connectionRegSigHandler
     (
     cdbus_Connection*               conn,
     cdbus_connectionSignalHandler   handler,
@@ -714,7 +715,7 @@ cdbus_connectionRegisterSignalHandler
 
 
 cdbus_HResult
-cdbus_connectionUnregisterSignalHandler
+cdbus_connectionUnregSigHandler
     (
     cdbus_Connection*   conn,
     cdbus_Handle        regHnd
@@ -801,9 +802,9 @@ cdbus_connectionDispatchSignalMatches
                 cdbus_signalMatchUnref(sigMatch);
                 result = DBUS_HANDLER_RESULT_HANDLED;
             }
-            cdbus_signalMatchUnref(sigMatch);
-            conn->nextSigMatch = LIST_END(&conn->sigMatches);
         }
+        /* Reset for the next time this is called */
+        conn->nextSigMatch = LIST_END(&conn->sigMatches);
         CDBUS_UNLOCK(conn->lock);
     }
 

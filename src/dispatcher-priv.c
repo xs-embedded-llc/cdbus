@@ -510,28 +510,18 @@ cdbus_dispatcherAddConnection
              * used to unreference the connection.
              */
 
-            /* We only filter private connections looking for internally
-             * generated disconnect signals
-             */
-            if ( !conn->isPrivate )
+            /* If we can't add the filter then ... */
+            if ( !dbus_connection_add_filter(
+                    cdbus_connectionGetDBus(conn),
+                    cdbus_connectionFilterHandler, conn, NULL) )
             {
-                status = CDBUS_RESULT_SUCCESS;
+                status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
+                                            CDBUS_FAC_DBUS,
+                                            CDBUS_EC_ALLOC_FAILURE);
             }
             else
             {
-                /* If we can't add the filter then ... */
-                if ( !dbus_connection_add_filter(
-                        cdbus_connectionGetDBus(conn),
-                        cdbus_connectionFilterHandler, conn, NULL) )
-                {
-                    status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
-                                                CDBUS_FAC_DBUS,
-                                                CDBUS_EC_ALLOC_FAILURE);
-                }
-                else
-                {
-                    status = CDBUS_RESULT_SUCCESS;
-                }
+                status = CDBUS_RESULT_SUCCESS;
             }
 
             if ( CDBUS_SUCCEEDED(status) )
@@ -589,12 +579,9 @@ cdbus_dispatcherRemoveConnection
         {
             if ( curConn == conn )
             {
-                if ( curConn->isPrivate )
-                {
-                    dbus_connection_remove_filter(
-                        cdbus_connectionGetDBus(curConn),
-                        cdbus_connectionFilterHandler, curConn);
-                }
+                dbus_connection_remove_filter(
+                    cdbus_connectionGetDBus(curConn),
+                    cdbus_connectionFilterHandler, curConn);
                 LIST_REMOVE(curConn, link);
 
                 /* We're no longer handling callbacks for this connection

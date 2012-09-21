@@ -69,7 +69,7 @@ CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
 
-/* Only to be called from a secondary thread after the wakeup function has been called. */
+/* Only to be called by client code after the wake up function has been called on the client. */
 CDBUS_EXPORT void cdbus_dispatcherInvokePending(CDBUS_DISPATCHER_P);
 
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,

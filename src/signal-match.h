@@ -44,6 +44,7 @@ typedef struct cdbus_SignalMatch
     void*                           userData;
     cdbus_SignalRule                rule;
     cdbus_Char*                     ruleStr;
+    cdbus_UInt16                    nFilterArgs;
     cdbus_Atomic                    refCnt;
     LIST_ENTRY(cdbus_SignalMatch)   link;
 } cdbus_SignalMatch;

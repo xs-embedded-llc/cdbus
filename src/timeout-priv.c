@@ -63,25 +63,35 @@ cdbus_timerCallback
     }
     else
     {
+        /* Add a reference to the timer in case
+         * the callback handler tries to unreference
+         * it.
+         */
+        cdbus_timeoutRef(timeout);
+
         /* Make a copy while we hold the lock so we don't have to
          * maintain the lock while calling the handler.
          */
         CDBUS_LOCK(timeout->lock);
         handler = timeout->handler;
         data = timeout->data;
-        CDBUS_UNLOCK(timeout->lock);
 
         if ( NULL != handler )
         {
+            CDBUS_UNLOCK(timeout->lock);
             handler(timeout, data);
+            CDBUS_LOCK(timeout->lock);
         }
         else
         {
             CDBUS_TRACE((CDBUS_TRC_INFO, "No timeout handler configured"));
         }
 
+        CDBUS_UNLOCK(timeout->lock);
+
         /* Enable or disable the timer based on the repeat mode */
         cdbus_timeoutEnable(timeout, cdbus_timeoutGetRepeat(timeout));
+        cdbus_timeoutUnref(timeout);
     }
 }
 

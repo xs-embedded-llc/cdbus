@@ -100,6 +100,12 @@ cdbus_ioWatchCallback
     }
     else
     {
+        /* Add a reference to the watch in case
+         * the callback handler tries to unreference
+         * it.
+         */
+        cdbus_watchRef(w);
+
         /* Make a copy while we hold the lock so we don't have to
          * maintain the lock while calling the handler.
          */
@@ -116,6 +122,8 @@ cdbus_ioWatchCallback
         {
             CDBUS_TRACE((CDBUS_TRC_INFO, "No watch handler configured"));
         }
+
+        cdbus_watchUnref(w);
     }
 }
 

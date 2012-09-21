@@ -60,10 +60,10 @@ typedef struct cdbus_SignalRule
     cdbus_Bool treatPathAsNamespace;
     cdbus_Char* arg0Namespace;
     cdbus_FilterArgItem* filterArgs;
-    cdbus_UInt16 nFilterArgs;
 } cdbus_SignalRule;
 
-typedef void (*cdbus_connectionSignalHandler)(cdbus_Connection* conn, cdbus_Handle hnd , DBusMessage*, void* userData);
+typedef void (*cdbus_connectionSignalHandler)(cdbus_Connection* conn, cdbus_Handle hnd,
+                                                DBusMessage* msg, void* userData);
 
 CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpen(struct cdbus_Dispatcher* disp, const cdbus_Char* address,
                                                 cdbus_Bool private, cdbus_Bool exitOnDisconnect);
@@ -80,13 +80,13 @@ CDBUS_EXPORT cdbus_Bool cdbus_connectionSendWithReply(cdbus_Connection* conn, DB
                                                     DBusPendingCallNotifyFunction  notifyFunc,
                                                     void* userData, DBusFreeFunction freeUserDataFunc);
 
-CDBUS_EXPORT cdbus_Handle cdbus_connectionRegisterSignalHandler(
+CDBUS_EXPORT cdbus_Handle cdbus_connectionRegSigHandler(
                                                     cdbus_Connection* conn,
                                                     cdbus_connectionSignalHandler handler,
                                                     void* userData,
                                                     const cdbus_SignalRule* rule,
                                                     cdbus_HResult* hResult);
-CDBUS_EXPORT cdbus_HResult cdbus_connectionUnregisterSignalHandler(
+CDBUS_EXPORT cdbus_HResult cdbus_connectionUnregSigHandler(
                                                     cdbus_Connection* conn,
                                                     cdbus_Handle regHnd);
 
