@@ -72,6 +72,7 @@ cdbus_signalMatchNew
             obj->rule.path = cdbus_strDup(rule->path);
             obj->rule.arg0Namespace = cdbus_strDup(rule->arg0Namespace);
             obj->rule.treatPathAsNamespace = rule->treatPathAsNamespace;
+            obj->rule.localObjPath = cdbus_strDup(rule->localObjPath);
 
             /* Count the number of filter arguments */
             obj->nFilterArgs = 0U;
@@ -157,6 +158,7 @@ cdbus_signalMatchUnref
            cdbus_free(sigMatch->rule.objInterface);
            cdbus_free(sigMatch->rule.path);
            cdbus_free(sigMatch->rule.arg0Namespace);
+           cdbus_free(sigMatch->rule.localObjPath);
            cdbus_free(sigMatch->ruleStr);
            for ( idx = 0; idx < sigMatch->nFilterArgs; idx++ )
            {
@@ -201,12 +203,16 @@ cdbus_signalMatchIsMatch
                   ((sigMatch->rule.objInterface == NULL) ? CDBUS_TRUE :
                       dbus_message_has_interface(msg, sigMatch->rule.objInterface)) &&
                   ((sigMatch->rule.path == NULL) ? CDBUS_TRUE :
-                      sigMatch->rule.treatPathAsNamespace ?
-                      ((NULL == path) ?
-                          CDBUS_FALSE :
-                          (0 == strncmp(sigMatch->rule.path, path,
-                                        strlen(sigMatch->rule.path)))) :
-                      dbus_message_has_path(msg, sigMatch->rule.path));
+                      !sigMatch->rule.treatPathAsNamespace ?
+                          dbus_message_has_path(msg, sigMatch->rule.path) :
+                          ((NULL == path) ? CDBUS_FALSE :
+                              ((0 == strncmp(sigMatch->rule.path, path,
+                                            strlen(sigMatch->rule.path)))
+                                               ||
+                               ((NULL == sigMatch->rule.localObjPath) ? CDBUS_FALSE :
+                                   (0 == strncmp(sigMatch->rule.path,
+                                           sigMatch->rule.localObjPath,
+                                           strlen(sigMatch->rule.path)))))));
 
         if ( isMatch && (0 < sigMatch->nFilterArgs) )
         {
@@ -278,8 +284,11 @@ cdbus_signalMatchIsMatch
                                         {
                                             lenA = strlen(value);
                                             lenB = strlen(sigMatch->rule.filterArgs[idx].value);
-                                            if ( (0 == strncmp(value, sigMatch->rule.filterArgs[idx].value, lenA)) ||
-                                                (0 == strncmp(sigMatch->rule.filterArgs[idx].value, value, lenB)) )
+                                            if ( ((0 < lenA) && ('/' == value[lenA-1]) &&
+                                                (0 == strncmp(value, sigMatch->rule.filterArgs[idx].value, lenA)))
+                                                                    ||
+                                                ((0 < lenB) && ('/' == sigMatch->rule.filterArgs[idx].value[lenB-1]) &&
+                                                (0 == strncmp(sigMatch->rule.filterArgs[idx].value, value, lenB))) )
                                             {
                                                 nArgMatches++;
                                             }
@@ -373,11 +382,11 @@ cdbus_signalMatchGetRule
                 {
                     if ( sigMatch->rule.treatPathAsNamespace )
                     {
-                        cdbus_stringBufferAppendFormat(sb, ",path='%s'", sigMatch->rule.path);
+                        cdbus_stringBufferAppendFormat(sb, ",path_namespace='%s'", sigMatch->rule.path);
                     }
                     else
                     {
-                        cdbus_stringBufferAppendFormat(sb, ",path_namespace='%s'", sigMatch->rule.path);
+                        cdbus_stringBufferAppendFormat(sb, ",path='%s'", sigMatch->rule.path);
                     }
                 }
 

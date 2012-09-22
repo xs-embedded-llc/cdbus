@@ -58,6 +58,7 @@ typedef struct cdbus_SignalRule
     cdbus_Char* sender;
     cdbus_Char* path;
     cdbus_Bool treatPathAsNamespace;
+    cdbus_Char* localObjPath;
     cdbus_Char* arg0Namespace;
     cdbus_FilterArgItem* filterArgs;
 } cdbus_SignalRule;
