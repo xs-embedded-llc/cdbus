@@ -168,8 +168,8 @@ cdbus_interfaceNew
             LIST_INIT(&intf->methods);
             LIST_INIT(&intf->signals);
             LIST_INIT(&intf->props);
-            intf->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-            if ( (NULL != intf->lock) && (NULL != intf->name) )
+            CDBUS_LOCK_ALLOC(intf->lock, CDBUS_MUTEX_RECURSIVE);
+            if ( !CDBUS_LOCK_IS_NULL(intf->lock) && (NULL != intf->name) )
             {
                 cdbus_interfaceRef(intf);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
@@ -178,7 +178,7 @@ cdbus_interfaceNew
             else
             {
                 /* These functions check for NULL pointers */
-                cdbus_mutexFree(intf->lock);
+                CDBUS_LOCK_FREE(intf->lock);
                 cdbus_free(intf->name);
                 cdbus_free(intf);
                 intf = NULL;
@@ -227,7 +227,7 @@ void cdbus_interfaceUnref
            cdbus_interfaceFreePropertyList(intf);
 
            CDBUS_UNLOCK(intf->lock);
-           cdbus_mutexFree(intf->lock);
+           CDBUS_LOCK_FREE(intf->lock);
            cdbus_free(intf);
            CDBUS_TRACE((CDBUS_TRC_INFO,
                         "Destroyed the interface instance (%p)", (void*)intf));

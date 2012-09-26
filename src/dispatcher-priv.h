@@ -50,7 +50,7 @@ struct cdbus_Dispatcher
     LIST_HEAD(cdbus_TimeoutHead, cdbus_Timeout) timeouts;
     cdbus_Atomic                                refCnt;
     ev_async                                    asyncWatch;
-    cdbus_Mutex*                                lock;
+    CDBUS_LOCK_DECLARE(lock);
     cdbus_WakeupFunc                            wakeupFunc;
     void*                                       wakeupData;
     cdbus_Semaphore*                            barrier;

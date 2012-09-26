@@ -36,7 +36,7 @@
 struct cdbus_Registry
 {
     cdbus_Atomic                                        refCnt;
-    cdbus_Mutex*                                        lock;
+    CDBUS_LOCK_DECLARE(lock);
     cdbus_RegistryFreeValueFunc                         freeFunc;
     LIST_HEAD(cdbus_RegistryHead, cdbus_RegistryItem)   regItems;
 };
@@ -61,8 +61,8 @@ cdbus_registryNew
     {
         LIST_INIT(&reg->regItems);
         reg->freeFunc = f;
-        reg->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-        if ( NULL != reg->lock )
+        CDBUS_LOCK_ALLOC(reg->lock, CDBUS_MUTEX_RECURSIVE);
+        if ( !CDBUS_LOCK_IS_NULL(reg->lock) )
         {
             reg = cdbus_registryRef(reg);
             CDBUS_TRACE((CDBUS_TRC_INFO,
@@ -130,7 +130,7 @@ cdbus_registryUnref
             }
 
             CDBUS_UNLOCK(reg->lock);
-            cdbus_mutexFree(reg->lock);
+            CDBUS_LOCK_FREE(reg->lock);
             cdbus_free(reg);
             CDBUS_TRACE((CDBUS_TRC_INFO,
                               "Destroyed a registry instance (%p)", (void*)reg));

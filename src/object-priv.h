@@ -39,7 +39,7 @@ struct cdbus_Object
     cdbus_Char*                 objPath;
     void*                       userData;
     cdbus_Atomic                refCnt;
-    cdbus_Mutex*                lock;
+    CDBUS_LOCK_DECLARE(lock);
     cdbus_StrPtrMap*            interfaces;
     cdbus_ObjectMessageHandler  handler;
 };

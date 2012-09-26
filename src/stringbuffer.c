@@ -302,7 +302,7 @@ cdbus_stringBufferAppendFormat
             nWritten = vsnprintf(&sb->buf[sb->length], available, fmt, args);
             va_end(args);
 
-            if ( (nWritten > -1) && nWritten < available )
+            if ( (nWritten > -1) && (cdbus_UInt32)nWritten < available )
             {
                 sb->length += nWritten;
                 sb->buf[sb->length] = '\0';

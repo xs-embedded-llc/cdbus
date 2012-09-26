@@ -83,6 +83,7 @@ cdbus_connectionObjectPathUnregisterHandler
     )
 {
     cdbus_ObjectConnBinding* binder;
+    CDBUS_UNUSED(dbusConn);
 
     if ( NULL != userData )
     {
@@ -110,8 +111,8 @@ cdbus_connectionNew
         conn = cdbus_calloc(1, sizeof(*conn));
         if ( NULL != conn )
         {
-            conn->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-            if ( NULL == conn->lock )
+            CDBUS_LOCK_ALLOC(conn->lock, CDBUS_MUTEX_RECURSIVE);
+            if ( CDBUS_LOCK_IS_NULL(conn->lock) )
             {
                 cdbus_free(conn);
                 conn = NULL;
@@ -146,6 +147,8 @@ cdbus_connectionFilterHandler
     DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     cdbus_Connection* conn = (cdbus_Connection*)data;
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
+
+    CDBUS_UNUSED(dbusConn);
 
     if ( DBUS_MESSAGE_TYPE_SIGNAL == dbus_message_get_type(msg) )
     {
@@ -230,7 +233,7 @@ cdbus_connectionUnref
 
             cdbus_dispatcherUnref(conn->dispatcher);
             CDBUS_UNLOCK(conn->lock);
-            cdbus_mutexFree(conn->lock);
+            CDBUS_LOCK_FREE(conn->lock);
             cdbus_free(conn);
             CDBUS_TRACE((CDBUS_TRC_INFO,
                     "Destroyed connection instance (%p)", (void*)conn));
@@ -500,7 +503,7 @@ cdbus_connectionRegisterObject
     cdbus_Bool isRegistered = CDBUS_FALSE;
     DBusObjectPathVTable vTable = {
                         cdbus_connectionObjectPathUnregisterHandler,
-                        cdbus_connectionObjectPathMsgHandler };
+                        cdbus_connectionObjectPathMsgHandler, NULL, NULL, NULL, NULL };
     DBusError dbusError;
     cdbus_ObjectConnBinding* binder;
 
@@ -631,8 +634,9 @@ cdbus_connectionLock
     )
 {
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
-    return cdbus_mutexLock(conn->lock);
+    return CDBUS_LOCK(conn->lock);
 #else
+    CDBUS_UNUSED(conn);
     return CDBUS_TRUE;
 #endif
 }
@@ -645,8 +649,9 @@ cdbus_connectionUnlock
     )
 {
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
-    return cdbus_mutexUnlock(conn->lock);
+    return CDBUS_UNLOCK(conn->lock);
 #else
+    CDBUS_UNUSED(conn);
     return CDBUS_TRUE;
 #endif
 }

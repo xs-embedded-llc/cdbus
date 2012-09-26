@@ -31,6 +31,7 @@
 #include "cdbus/types.h"
 #include "pointer-pointer-map.h"
 #include "mutex.h"
+#include "ev.h"
 
 
 /*
@@ -43,5 +44,11 @@ extern cdbus_PtrPtrMap* cdbus_gDispatcherRegistry;
 
 
 #define CDBUS_UNUSED(X) (void)(X)
+
+#if EV_MULTIPLICITY
+#define CDBUS_EV_UNUSED(X) CDBUS_UNUSED(X)
+#else
+#define CDBUS_EV_UNUSED(X)
+#endif
 
 #endif /* Guard for CDBUS_INTERNAL_H_ */

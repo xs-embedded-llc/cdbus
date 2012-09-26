@@ -44,7 +44,7 @@ typedef struct cdbus_objectRegistryItem
 struct cdbus_ObjectRegistry
 {
     cdbus_Atomic                refCnt;
-    cdbus_Mutex*                lock;
+    CDBUS_LOCK_DECLARE(lock);
     cdbus_objectRegistryItem*   items;
 };
 
@@ -55,8 +55,8 @@ cdbus_objectRegistryNew()
     cdbus_ObjectRegistry* reg = cdbus_calloc(1, sizeof(*reg));
     if ( NULL != reg )
     {
-        reg->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-        if ( NULL == reg->lock )
+        CDBUS_LOCK_ALLOC(reg->lock, CDBUS_MUTEX_RECURSIVE);
+        if ( CDBUS_LOCK_IS_NULL(reg->lock) )
         {
             cdbus_free(reg);
             reg = NULL;
@@ -122,7 +122,7 @@ cdbus_objectRegistryUnref
             }
 
             CDBUS_UNLOCK(reg->lock);
-            cdbus_mutexFree(reg->lock);
+            CDBUS_LOCK_FREE(reg->lock);
             cdbus_free(reg);
         }
     }

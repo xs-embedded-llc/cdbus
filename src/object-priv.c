@@ -67,12 +67,12 @@ cdbus_objectNew
         if ( NULL != obj )
         {
             obj->interfaces = cdbus_strPtrMapNew(cdbus_objFreeMapItem);
-            obj->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
+            CDBUS_LOCK_ALLOC(obj->lock, CDBUS_MUTEX_RECURSIVE);
             obj->objPath = cdbus_strDup(objPath);
             obj->userData = userData;
             obj->handler = defaultHandler;
 
-            if ( (NULL != obj->lock) &&
+            if ( !CDBUS_LOCK_IS_NULL(obj->lock) &&
                 (NULL != obj->objPath) &&
                 (NULL != obj->interfaces))
             {
@@ -86,9 +86,9 @@ cdbus_objectNew
                 /* Free up anything that may have already been
                  * allocated.
                  */
-                if ( NULL != obj->lock )
+                if ( !CDBUS_LOCK_IS_NULL(obj->lock) )
                 {
-                    cdbus_mutexFree(obj->lock);
+                    CDBUS_LOCK_FREE(obj->lock);
                 }
 
                 if ( NULL != obj->objPath )
@@ -147,7 +147,7 @@ void cdbus_objectUnref
             cdbus_strPtrMapUnref(obj->interfaces);
             cdbus_free(obj->objPath);
             CDBUS_UNLOCK(obj->lock);
-            cdbus_mutexFree(obj->lock);
+            CDBUS_LOCK_FREE(obj->lock);
             cdbus_free(obj);
             CDBUS_TRACE((CDBUS_TRC_INFO,
                                   "Destroyed an object instance (%p)", (void*)obj));

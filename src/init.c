@@ -36,7 +36,9 @@
 
 
 /* Global Variables */
-cdbus_Mutex* cdbus_gAtomicOpLock = NULL;
+#ifdef CDBUS_ENABLE_THREAD_SUPPORT
+CDBUS_LOCK_DECLARE(cdbus_gAtomicOpLock) = NULL;
+#endif
 cdbus_PtrPtrMap* cdbus_gDispatcherRegistry = NULL;
 
 cdbus_HResult
@@ -49,8 +51,8 @@ cdbus_initialize()
     dbus_threads_init_default();
 #endif
 
-    cdbus_gAtomicOpLock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-    if ( NULL == cdbus_gAtomicOpLock )
+    CDBUS_LOCK_ALLOC(cdbus_gAtomicOpLock, CDBUS_MUTEX_RECURSIVE);
+    if ( CDBUS_LOCK_IS_NULL(cdbus_gAtomicOpLock) )
     {
         status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                     CDBUS_FAC_CDBUS, CDBUS_EC_ALLOC_FAILURE);
@@ -60,7 +62,7 @@ cdbus_initialize()
         cdbus_gDispatcherRegistry = cdbus_ptrPtrMapNew(NULL);
         if ( NULL == cdbus_gDispatcherRegistry )
         {
-            cdbus_mutexFree(cdbus_gAtomicOpLock);
+            CDBUS_LOCK_FREE(cdbus_gAtomicOpLock);
             cdbus_gAtomicOpLock = NULL;
             status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                         CDBUS_FAC_CDBUS, CDBUS_EC_ALLOC_FAILURE);
@@ -76,9 +78,9 @@ cdbus_shutdown()
 {
     dbus_shutdown();
 
-    if ( NULL != cdbus_gAtomicOpLock )
+    if ( !CDBUS_LOCK_IS_NULL(cdbus_gAtomicOpLock) )
     {
-        cdbus_mutexFree(cdbus_gAtomicOpLock);
+        CDBUS_LOCK_FREE(cdbus_gAtomicOpLock);
     }
 
     if ( NULL != cdbus_gDispatcherRegistry )

@@ -47,9 +47,17 @@ cdbus_Bool cdbus_mutexUnlock(cdbus_Mutex* mutex);
 cdbus_Int32 cdbus_mutexCount(cdbus_Mutex* mutex);
 
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
+#define CDBUS_LOCK_DECLARE(NAME)    cdbus_Mutex* NAME
+#define CDBUS_LOCK_ALLOC(L, OPT)    do { L = cdbus_mutexNew(OPT); } while ( 0 )
+#define CDBUS_LOCK_FREE(L)          do { cdbus_mutexFree(L); L = NULL; } while ( 0 )
+#define CDBUS_LOCK_IS_NULL(L)       (L == NULL)
 #define CDBUS_LOCK(X) cdbus_mutexLock(X)
 #define CDBUS_UNLOCK(X) cdbus_mutexUnlock(X)
 #else
+#define CDBUS_LOCK_DECLARE(NAME)
+#define CDBUS_LOCK_ALLOC(L, OPT)
+#define CDBUS_LOCK_FREE(L)
+#define CDBUS_LOCK_IS_NULL(L)   ( CDBUS_FALSE )
 #define CDBUS_LOCK(X)
 #define CDBUS_UNLOCK(X)
 #endif

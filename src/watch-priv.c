@@ -32,6 +32,7 @@
 #include "dispatcher-priv.h"
 #include "alloc.h"
 #include "trace.h"
+#include "internal.h"
 
 #if EV_MULTIPLICITY
 #define CDBUS_WATCH_LOOP    w->dispatcher->loop
@@ -94,6 +95,9 @@ cdbus_ioWatchCallback
     cdbus_Watch* w = evIo->data;
     cdbus_WatchHandler handler = NULL;
     void* data = NULL;
+
+    CDBUS_EV_UNUSED(EV_A);
+
     if ( NULL == w )
     {
         CDBUS_TRACE((CDBUS_TRC_ERROR, "Can't cast to watch in IO event callback"));
@@ -145,8 +149,8 @@ cdbus_watchNew
         watch = cdbus_calloc(1, sizeof(*watch));
         if ( NULL != watch )
         {
-            watch->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-            if ( NULL == watch->lock )
+            CDBUS_LOCK_ALLOC(watch->lock, CDBUS_MUTEX_RECURSIVE);
+            if ( CDBUS_LOCK_IS_NULL(watch->lock) )
             {
                 cdbus_free(watch);
                 watch = NULL;
@@ -211,7 +215,7 @@ cdbus_watchUnref
             }
             cdbus_dispatcherUnref(w->dispatcher);
             CDBUS_UNLOCK(w->lock);
-            cdbus_mutexFree(w->lock);
+            CDBUS_LOCK_FREE(w->lock);
             cdbus_free(w);
             CDBUS_TRACE((CDBUS_TRC_INFO,
                   "Destroyed watch instance (%p)", (void*)w));

@@ -44,7 +44,7 @@ struct cdbus_StrPtrMap
     cdbus_Atomic            refCnt;
     cdbus_StrPtrMapNode*    items;
     cdbus_StrPtrMapFreeFunc freeFunc;
-    cdbus_Mutex*            lock;
+    CDBUS_LOCK_DECLARE(lock);
 };
 
 
@@ -57,8 +57,8 @@ cdbus_strPtrMapNew
     cdbus_StrPtrMap* map = cdbus_calloc(1, sizeof(*map));
     if ( NULL != map )
     {
-        map->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-        if ( NULL == map->lock )
+        CDBUS_LOCK_ALLOC(map->lock, CDBUS_MUTEX_RECURSIVE);
+        if ( CDBUS_LOCK_IS_NULL(map->lock) )
         {
             cdbus_free(map);
         }
@@ -127,7 +127,7 @@ cdbus_strPtrMapUnref
             }
 
             CDBUS_UNLOCK(map->lock);
-            cdbus_mutexFree(map->lock);
+            CDBUS_LOCK_FREE(map->lock);
             cdbus_free(map);
         }
     }
@@ -145,7 +145,7 @@ cdbus_strPtrMapLock
     if ( NULL != map )
     {
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
-        isLocked = cdbus_mutexLock(map->lock);
+        isLocked = CDBUS_LOCK(map->lock);
 #else
         isLocked = CDBUS_TRUE;
 #endif
@@ -166,7 +166,7 @@ cdbus_strPtrMapUnlock
     if ( NULL != map )
     {
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
-        isUnlocked = cdbus_mutexUnlock(map->lock);
+        isUnlocked = CDBUS_UNLOCK(map->lock);
 #else
         isUnlocked = CDBUS_TRUE;
 #endif

@@ -36,6 +36,7 @@
 #include "atomic-ops.h"
 #include "alloc.h"
 #include "trace.h"
+#include "internal.h"
 
 #if EV_MULTIPLICITY
 #define CDBUS_TIMEOUT_LOOP    t->dispatcher->loop
@@ -56,6 +57,9 @@ cdbus_timerCallback
     cdbus_Timeout* timeout = evTimer->data;
     cdbus_TimeoutHandler handler = NULL;
     void* data = NULL;
+
+    CDBUS_EV_UNUSED(EV_A);
+    CDBUS_UNUSED(rcvEvents);
 
     if ( NULL == timeout )
     {
@@ -114,8 +118,8 @@ cdbus_timeoutNew
         timeout = cdbus_calloc(1, sizeof(*timeout));
         if ( NULL != timeout )
         {
-            timeout->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-            if ( NULL == timeout->lock )
+            CDBUS_LOCK_ALLOC(timeout->lock, CDBUS_MUTEX_RECURSIVE);
+            if ( CDBUS_LOCK_IS_NULL(timeout->lock) )
             {
                 cdbus_free(timeout);
                 timeout = NULL;
@@ -181,7 +185,7 @@ cdbus_timeoutUnref
             }
             cdbus_dispatcherUnref(t->dispatcher);
             CDBUS_UNLOCK(t->lock);
-            cdbus_mutexFree(t->lock);
+            CDBUS_LOCK_FREE(t->lock);
             cdbus_free(t);
             CDBUS_TRACE((CDBUS_TRC_INFO,
                   "Destroyed timeout instance (%p)", (void*)t));

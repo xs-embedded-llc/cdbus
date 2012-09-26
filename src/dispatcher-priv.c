@@ -93,6 +93,7 @@ cdbus_asyncCallback
 
     /* Used for the side-effect of waking up the event loop */
     CDBUS_UNUSED(rcvEvents);
+    CDBUS_EV_UNUSED(EV_A);
 
     cdbus_Dispatcher* CDBUS_DISPATCHER_A = (cdbus_Dispatcher*)w->data;
     if ( CDBUS_DISPATCHER_A->dispatchNeeded )
@@ -199,6 +200,7 @@ cdbus_runPendingHandlers
     void*               arg
     )
 {
+    CDBUS_UNUSED(arg);
     ev_invoke_pending(CDBUS_DISPATCHER_LOOP);
 }
 
@@ -315,15 +317,15 @@ cdbus_dispatcherNew
             LIST_INIT(&CDBUS_DISPATCHER_A->connections);
             LIST_INIT(&CDBUS_DISPATCHER_A->watches);
             LIST_INIT(&CDBUS_DISPATCHER_A->timeouts);
-            CDBUS_DISPATCHER_A->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
+            CDBUS_LOCK_ALLOC(CDBUS_DISPATCHER_A->lock, CDBUS_MUTEX_RECURSIVE);
             CDBUS_DISPATCHER_A->barrier = cdbus_semaphoreNew(0);
 
-            if ( (NULL == CDBUS_DISPATCHER_A->lock) ||
+            if ( CDBUS_LOCK_IS_NULL(CDBUS_DISPATCHER_A->lock) ||
                 (NULL == CDBUS_DISPATCHER_A->barrier) )
             {
-                if ( NULL != CDBUS_DISPATCHER_A->lock )
+                if ( !CDBUS_LOCK_IS_NULL(CDBUS_DISPATCHER_A->lock) )
                 {
-                    cdbus_mutexFree(CDBUS_DISPATCHER_A->lock);
+                    CDBUS_LOCK_FREE(CDBUS_DISPATCHER_A->lock);
                 }
 
                 if ( NULL != CDBUS_DISPATCHER_A->barrier )
@@ -444,7 +446,7 @@ cdbus_dispatcherUnref
 
             CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
 
-            cdbus_mutexFree(CDBUS_DISPATCHER_A->lock);
+            CDBUS_LOCK_FREE(CDBUS_DISPATCHER_A->lock);
             cdbus_semaphoreFree(CDBUS_DISPATCHER_A->barrier);
 
             /* Free the dispatcher itself */

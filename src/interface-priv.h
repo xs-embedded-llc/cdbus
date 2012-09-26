@@ -70,10 +70,10 @@ typedef struct cdbus_InterfaceProperty
 struct cdbus_Interface
 {
     cdbus_Atomic                    refCnt;
-    cdbus_Mutex*                    lock;
     cdbus_InterfaceMessageHandler   handler;
     void*                           userData;
     cdbus_Char*                     name;
+    CDBUS_LOCK_DECLARE(lock);
     LIST_HEAD(cdbus_InfItemHead, cdbus_InterfaceItem)       methods;
     struct cdbus_InfItemHead                                signals;
     LIST_HEAD(cdbus_InfPropHead, cdbus_InterfaceProperty)   props;

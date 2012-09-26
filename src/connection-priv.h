@@ -44,7 +44,7 @@ struct cdbus_Connection
     cdbus_Atomic                    refCnt;
     LIST_HEAD(cdbus_SigMatchHead,
               cdbus_SignalMatch)    sigMatches;
-    cdbus_Mutex*                    lock;
+    CDBUS_LOCK_DECLARE(lock);
     LIST_ENTRY(cdbus_Connection)    link;
 };
 

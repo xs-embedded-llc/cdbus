@@ -38,10 +38,10 @@ struct cdbus_Watch
 {
     cdbus_Dispatcher*       dispatcher;
     cdbus_Atomic            refCnt;
-    cdbus_Mutex*            lock;
     ev_io                   ioWatcher;
     void*                   data;
     cdbus_WatchHandler      handler;
+    CDBUS_LOCK_DECLARE(lock);
     LIST_ENTRY(cdbus_Watch) link;
 };
 

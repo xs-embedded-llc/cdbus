@@ -38,11 +38,11 @@ struct cdbus_Timeout
 {
     cdbus_Dispatcher*           dispatcher;
     cdbus_Atomic                refCnt;
-    cdbus_Mutex*                lock;
     ev_timer                    timerWatcher;
     cdbus_Bool                  repeat;
     cdbus_TimeoutHandler        handler;
     void*                       data;
+    CDBUS_LOCK_DECLARE(lock);
     LIST_ENTRY(cdbus_Timeout)   link;
 };
 

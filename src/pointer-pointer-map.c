@@ -44,7 +44,7 @@ struct cdbus_PtrPtrMap
     cdbus_Atomic            refCnt;
     cdbus_PtrPtrMapNode*    items;
     cdbus_PtrPtrMapFreeFunc freeFunc;
-    cdbus_Mutex*            lock;
+    CDBUS_LOCK_DECLARE(lock);
 };
 
 
@@ -57,8 +57,8 @@ cdbus_ptrPtrMapNew
     cdbus_PtrPtrMap* map = cdbus_calloc(1, sizeof(*map));
     if ( NULL != map )
     {
-        map->lock = cdbus_mutexNew(CDBUS_MUTEX_RECURSIVE);
-        if ( NULL == map->lock )
+        CDBUS_LOCK_ALLOC(map->lock, CDBUS_MUTEX_RECURSIVE);
+        if ( CDBUS_LOCK_IS_NULL(map->lock) )
         {
             cdbus_free(map);
         }
@@ -127,7 +127,7 @@ cdbus_ptrPtrMapUnref
             }
 
             CDBUS_UNLOCK(map->lock);
-            cdbus_mutexFree(map->lock);
+            CDBUS_LOCK_FREE(map->lock);
             cdbus_free(map);
         }
     }
