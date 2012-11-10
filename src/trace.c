@@ -30,6 +30,39 @@
 
 static cdbus_UInt32 gsTraceMask = CDBUS_TRC_ALL;
 
+int
+cdbus_traceIsEnabled
+    (
+    unsigned    level,
+    ...
+    )
+{
+    return (level & gsTraceMask) != 0;
+}
+
+
+void
+cdbus_tracePrintPrefix
+    (
+    int         isEnabled,
+    const char* file,
+    const char* funcName,
+    unsigned    line
+    )
+{
+    if ( isEnabled )
+    {
+        if ( NULL != funcName )
+        {
+            fprintf(stderr, "%s:%s(%u) ", file, funcName, line);
+        }
+        else
+        {
+            fprintf(stderr, "%s(%u) ", file, line);
+        }
+    }
+}
+
 
 void
 cdbus_trace
@@ -39,7 +72,7 @@ cdbus_trace
     ...
     )
 {
-    const char* levelStr = "NONE";
+    const char* levelStr = "";
     va_list args;
 
     if ( level & gsTraceMask )

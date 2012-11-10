@@ -43,6 +43,8 @@ struct DBusMessage;
 #define CDBUS_TRC_TRACE (1 << 0)
 #define CDBUS_TRC_ALL   (~CDBUS_TRC_OFF)
 
+int cdbus_traceIsEnabled(unsigned level, ...);
+void cdbus_tracePrintPrefix(int isEnabled, const char* file, const char* funcName, unsigned line);
 void cdbus_trace(cdbus_UInt32 level, const cdbus_Char* fmt, ...);
 void cdbus_traceSetMask(cdbus_UInt32 mask);
 cdbus_UInt32 cdbus_traceGetMask();
@@ -66,15 +68,15 @@ void cdbus_traceMessage(cdbus_UInt32 level, struct DBusMessage* msg);
         #define CDBUS_BASENAME(X)   X
     #endif
 
-    #if (__STDC_VERSION__ >= 199901L)
-        #define CDBUS_TRACE(X) \
-            do { fprintf(stderr, "%s:%s(%u) ", CDBUS_BASENAME(__FILE__), __FUNCTION__, __LINE__); \
-            cdbus_trace X; } while ( 0 )
-    #else
-        #define CDBUS_TRACE(X) \
-            do { fprintf(stderr, "%s(%u) ", CDBUS_BASENAME(__FILE__), __LINE__); \
-            cdbus_trace X; } while ( 0 )
-    #endif
+#if (__STDC_VERSION__ >= 199901L)
+    #define CDBUS_TRACE(X) \
+        do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), __FUNCTION__, __LINE__); \
+        cdbus_trace X; } while ( 0 )
+#else
+    #define CDBUS_TRACE(X) \
+        do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), 0, __LINE__); \
+        cdbus_trace X; } while ( 0 )
+#endif
 #else
     #define CDBUS_TRACE(X) do { if ( 0 ) cdbus_trace X; } while ( 0 )
 #endif
