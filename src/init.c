@@ -63,7 +63,6 @@ cdbus_initialize()
         if ( NULL == cdbus_gDispatcherRegistry )
         {
             CDBUS_LOCK_FREE(cdbus_gAtomicOpLock);
-            cdbus_gAtomicOpLock = NULL;
             status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                         CDBUS_FAC_CDBUS, CDBUS_EC_ALLOC_FAILURE);
         }

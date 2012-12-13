@@ -28,7 +28,7 @@
 #include <dbus/dbus.h>
 #include "trace.h"
 
-static cdbus_UInt32 gsTraceMask = CDBUS_TRC_ALL;
+static volatile cdbus_UInt32 gsTraceMask = CDBUS_TRC_ALL;
 
 int
 cdbus_traceIsEnabled
