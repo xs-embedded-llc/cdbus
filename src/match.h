@@ -18,15 +18,15 @@
  *
  *******************************************************************************
  *******************************************************************************
- * @file           signal-match.h        
+ * @file           match.h
  * @author         Glenn Schmottlach
- * @brief          Define an object representing a signal match and the
+ * @brief          Define an object representing a match rule and the
  *                 operations on it.
  *******************************************************************************
  */
 
-#ifndef CDBUS_SIGNAL_MATCH_H_
-#define CDBUS_SIGNAL_MATCH_H_
+#ifndef CDBUS_MATCH_H_
+#define CDBUS_MATCH_H_
 
 #include "cdbus/cdbus.h"
 #include "dbus/dbus.h"
@@ -38,30 +38,30 @@ CDBUS_BEGIN_DECLS
 struct cdbus_Connection;
 
 
-typedef struct cdbus_SignalMatch
+typedef struct cdbus_Match
 {
-    cdbus_connectionSignalHandler   handler;
+    cdbus_connectionMatchHandler    handler;
     void*                           userData;
-    cdbus_SignalRule                rule;
+    cdbus_MatchRule                 rule;
     cdbus_Char*                     ruleStr;
     cdbus_UInt16                    nFilterArgs;
     cdbus_Atomic                    refCnt;
-    LIST_ENTRY(cdbus_SignalMatch)   link;
-} cdbus_SignalMatch;
+    LIST_ENTRY(cdbus_Match)         link;
+} cdbus_Match;
 
-cdbus_SignalMatch* cdbus_signalMatchNew(cdbus_connectionSignalHandler handler,
+cdbus_Match* cdbus_matchNew(cdbus_connectionMatchHandler handler,
                                         void* userData,
-                                        const cdbus_SignalRule* rule);
-cdbus_SignalMatch* cdbus_signalMatchRef(cdbus_SignalMatch* sigMatch);
-void cdbus_signalMatchUnref(cdbus_SignalMatch* sigMatch);
-cdbus_Bool cdbus_signalMatchIsMatch(cdbus_SignalMatch* sigMatch, DBusMessage* msg);
-void cdbus_signalMatchDispatch(struct cdbus_Connection* conn,
-                                cdbus_SignalMatch* sigMatch,
+                                        const cdbus_MatchRule* rule);
+cdbus_Match* cdbus_matchRef(cdbus_Match* match);
+void cdbus_matchUnref(cdbus_Match* match);
+cdbus_Bool cdbus_matchIsMatch(cdbus_Match* match, DBusMessage* msg);
+void cdbus_matchDispatch(struct cdbus_Connection* conn,
+                                cdbus_Match* match,
                                 DBusMessage* msg);
-const cdbus_Char* cdbus_signalMatchGetRule(cdbus_SignalMatch* sigMatch);
-cdbus_Bool cdbus_signalMatchAddFilter(cdbus_SignalMatch* sigMatch, struct cdbus_Connection* conn);
-cdbus_Bool cdbus_signalMatchRemoveFilter(cdbus_SignalMatch* sigMatch, struct cdbus_Connection* conn);
+const cdbus_Char* cdbus_matchGetRule(cdbus_Match* match);
+cdbus_Bool cdbus_matchAddFilter(cdbus_Match* match, struct cdbus_Connection* conn);
+cdbus_Bool cdbus_matchRemoveFilter(cdbus_Match* match, struct cdbus_Connection* conn);
 
 CDBUS_END_DECLS
 
-#endif /* Guard for CDBUS_SIGNAL_MATCH_H_ */
+#endif /* Guard for CDBUS_MATCH_H_ */

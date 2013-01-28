@@ -37,7 +37,7 @@
 #include "dbus-watch-ctrl.h"
 #include "dbus-timeout-ctrl.h"
 #include "internal.h"
-#include "signal-match.h"
+#include "match.h"
 
 typedef struct cdbus_ObjectConnBinding
 {
@@ -123,8 +123,8 @@ cdbus_connectionNew
                 assert( NULL != conn->dispatcher );
                 conn->dbusConn = dbusConn;
                 conn->isPrivate = isPrivate;
-                LIST_INIT(&conn->sigMatches);
-                conn->nextSigMatch = LIST_END(&conn->sigMatches);
+                LIST_INIT(&conn->matches);
+                conn->nextMatch = LIST_END(&conn->matches);
                 cdbus_connectionRef(conn);
                 CDBUS_TRACE((CDBUS_TRC_INFO,
                     "Created connection instance (%p)", (void*)conn));
@@ -189,7 +189,7 @@ cdbus_connectionUnref
     )
 {
     cdbus_Int32 value;
-    cdbus_SignalMatch* sigMatch;
+    cdbus_Match* match;
 
     assert( NULL != conn );
     if ( NULL != conn )
@@ -222,13 +222,13 @@ cdbus_connectionUnref
                 dbus_connection_unref(conn->dbusConn);
             }
 
-            /* Loop through any signal filter matches we have and dispose of them */
-            for ( sigMatch = LIST_FIRST(&conn->sigMatches);
-                sigMatch != LIST_END(&conn->sigMatches);
-                sigMatch = conn->nextSigMatch )
+            /* Loop through any matches we have and dispose of them */
+            for ( match = LIST_FIRST(&conn->matches);
+                match != LIST_END(&conn->matches);
+                match = conn->nextMatch )
             {
-                conn->nextSigMatch = LIST_NEXT(sigMatch, link);
-                cdbus_signalMatchUnref(sigMatch);
+                conn->nextMatch = LIST_NEXT(match, link);
+                cdbus_matchUnref(match);
             }
 
             cdbus_dispatcherUnref(conn->dispatcher);
@@ -658,12 +658,12 @@ cdbus_connectionUnlock
 
 
 cdbus_Handle
-cdbus_connectionRegSigHandler
+cdbus_connectionRegMatchHandler
     (
     cdbus_Connection*               conn,
-    cdbus_connectionSignalHandler   handler,
+    cdbus_connectionMatchHandler   handler,
     void*                           userData,
-    const cdbus_SignalRule*         rule,
+    const cdbus_MatchRule*         rule,
     cdbus_HResult*                  hResult
     )
 {
@@ -671,7 +671,7 @@ cdbus_connectionRegSigHandler
    cdbus_HResult result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                                CDBUS_FAC_CDBUS,
                                                CDBUS_EC_INTERNAL);
-   cdbus_SignalMatch* sigMatch = NULL;
+   cdbus_Match* match = NULL;
 
    if ( (NULL == conn) || (NULL == handler) )
    {
@@ -682,25 +682,25 @@ cdbus_connectionRegSigHandler
    else
    {
        CDBUS_LOCK(conn->lock);
-       sigMatch = cdbus_signalMatchNew(handler, userData, rule);
-       if ( NULL == sigMatch )
+       match = cdbus_matchNew(handler, userData, rule);
+       if ( NULL == match )
        {
            result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                       CDBUS_FAC_CDBUS,
                                       CDBUS_EC_ALLOC_FAILURE);
        }
 
-       if ( NULL != sigMatch )
+       if ( NULL != match )
        {
-           if ( cdbus_signalMatchAddFilter(sigMatch, conn) )
+           if ( cdbus_matchAddFilter(match, conn) )
            {
-               LIST_INSERT_HEAD(&conn->sigMatches, sigMatch, link);
+               LIST_INSERT_HEAD(&conn->matches, match, link);
                result = CDBUS_RESULT_SUCCESS;
-               hnd = sigMatch;
+               hnd = match;
            }
            else
            {
-               cdbus_signalMatchUnref(sigMatch);
+               cdbus_matchUnref(match);
                result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                            CDBUS_FAC_CDBUS,
                                            CDBUS_EC_FILTER_ERROR);
@@ -720,7 +720,7 @@ cdbus_connectionRegSigHandler
 
 
 cdbus_HResult
-cdbus_connectionUnregSigHandler
+cdbus_connectionUnregMatchHandler
     (
     cdbus_Connection*   conn,
     cdbus_Handle        regHnd
@@ -729,7 +729,7 @@ cdbus_connectionUnregSigHandler
     cdbus_HResult result = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                                 CDBUS_FAC_CDBUS,
                                                 CDBUS_EC_NOT_FOUND);
-    cdbus_SignalMatch* sigMatch = NULL;
+    cdbus_Match* match = NULL;
 
     if ( (NULL == conn) || (CDBUS_INVALID_HANDLE == regHnd) )
     {
@@ -742,9 +742,9 @@ cdbus_connectionUnregSigHandler
         CDBUS_LOCK(conn->lock);
 
         /* Find the registered signal match and remove it */
-        LIST_FOREACH(sigMatch, &conn->sigMatches, link)
+        LIST_FOREACH(match, &conn->matches, link)
         {
-            if ( (cdbus_SignalMatch*)regHnd == sigMatch )
+            if ( (cdbus_Match*)regHnd == match )
             {
                 /* If this function was called from a signal handler
                  * callback then we may be trying to unregister the
@@ -752,12 +752,12 @@ cdbus_connectionUnregSigHandler
                  * match forward one to skip over the match we're going
                  * to remove.
                  */
-                if ( sigMatch == conn->nextSigMatch )
+                if ( match == conn->nextMatch )
                 {
-                    conn->nextSigMatch = LIST_NEXT(sigMatch, link);
+                    conn->nextMatch = LIST_NEXT(match, link);
                 }
-                LIST_REMOVE(sigMatch, link);
-                if ( cdbus_signalMatchRemoveFilter(sigMatch, conn) )
+                LIST_REMOVE(match, link);
+                if ( cdbus_matchRemoveFilter(match, conn) )
                 {
                     result = CDBUS_RESULT_SUCCESS;
                 }
@@ -767,7 +767,7 @@ cdbus_connectionUnregSigHandler
                                                CDBUS_FAC_CDBUS,
                                                CDBUS_EC_FILTER_ERROR);
                 }
-                cdbus_signalMatchUnref(sigMatch);
+                cdbus_matchUnref(match);
                 break;
             }
         }
@@ -786,32 +786,32 @@ cdbus_connectionDispatchSignalMatches
     )
 {
     DBusHandlerResult result = DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-    cdbus_SignalMatch* sigMatch;
+    cdbus_Match* match;
 
     if ( (NULL != conn) && (NULL != msg) )
     {
         CDBUS_LOCK(conn->lock);
 
-        for ( sigMatch = LIST_FIRST(&conn->sigMatches);
-            sigMatch != LIST_END(&conn->sigMatches);
-            sigMatch = conn->nextSigMatch )
+        for ( match = LIST_FIRST(&conn->matches);
+            match != LIST_END(&conn->matches);
+            match = conn->nextMatch )
         {
-            conn->nextSigMatch = LIST_NEXT(sigMatch, link);
-            if ( cdbus_signalMatchIsMatch(sigMatch, msg) )
+            conn->nextMatch = LIST_NEXT(match, link);
+            if ( cdbus_matchIsMatch(match, msg) )
             {
                 /* Add a reference in case the handler tries to
                  * unregister the same handler.
                  */
-                cdbus_signalMatchRef(sigMatch);
+                cdbus_matchRef(match);
                 CDBUS_UNLOCK(conn->lock);
-                cdbus_signalMatchDispatch(conn, sigMatch, msg);
+                cdbus_matchDispatch(conn, match, msg);
                 CDBUS_LOCK(conn->lock);
-                cdbus_signalMatchUnref(sigMatch);
+                cdbus_matchUnref(match);
                 result = DBUS_HANDLER_RESULT_HANDLED;
             }
         }
         /* Reset for the next time this is called */
-        conn->nextSigMatch = LIST_END(&conn->sigMatches);
+        conn->nextMatch = LIST_END(&conn->matches);
         CDBUS_UNLOCK(conn->lock);
     }
 

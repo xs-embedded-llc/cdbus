@@ -18,16 +18,16 @@
  *
  *******************************************************************************
  *******************************************************************************
- * @file           signal-match.c        
+ * @file           match.c
  * @author         Glenn Schmottlach
- * @brief          Implementation of an object representing a signal match and
+ * @brief          Implementation of an object representing a match rule and
  *                 the operations on it.
  *******************************************************************************
  */
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include "signal-match.h"
+#include "match.h"
 #include "trace.h"
 #include "alloc.h"
 #include "atomic-ops.h"
@@ -46,15 +46,15 @@ int compareArgs
 }
 
 
-cdbus_SignalMatch*
-cdbus_signalMatchNew
+cdbus_Match*
+cdbus_matchNew
     (
-    cdbus_connectionSignalHandler   handler,
+    cdbus_connectionMatchHandler    handler,
     void*                           userData,
-    const cdbus_SignalRule*         rule
+    const cdbus_MatchRule*          rule
     )
 {
-    cdbus_SignalMatch* obj = NULL;
+    cdbus_Match* obj = NULL;
     cdbus_Int32 idx;
     cdbus_Bool allocError = CDBUS_FALSE;
     cdbus_FilterArgItem* item;
@@ -66,13 +66,17 @@ cdbus_signalMatchNew
         {
             obj->handler = handler;
             obj->userData = userData;
-            obj->rule.signalName = cdbus_strDup(rule->signalName);
+            obj->rule.msgType = rule->msgType;
+            obj->rule.member = cdbus_strDup(rule->member);
             obj->rule.sender = cdbus_strDup(rule->sender);
             obj->rule.objInterface = cdbus_strDup(rule->objInterface);
             obj->rule.path = cdbus_strDup(rule->path);
             obj->rule.arg0Namespace = cdbus_strDup(rule->arg0Namespace);
             obj->rule.treatPathAsNamespace = rule->treatPathAsNamespace;
             obj->rule.localObjPath = cdbus_strDup(rule->localObjPath);
+#if DBUS_VERSION >= 0x010506
+            obj->rule.eavesdrop = rule->eavesdrop;
+#endif
 
             /* Count the number of filter arguments */
             obj->nFilterArgs = 0U;
@@ -108,10 +112,10 @@ cdbus_signalMatchNew
                 }
             }
 
-            obj = cdbus_signalMatchRef(obj);
+            obj = cdbus_matchRef(obj);
             if ( allocError )
             {
-                cdbus_signalMatchUnref(obj);
+                cdbus_matchUnref(obj);
                 obj = NULL;
             }
         }
@@ -120,64 +124,64 @@ cdbus_signalMatchNew
 }
 
 
-cdbus_SignalMatch*
-cdbus_signalMatchRef
+cdbus_Match*
+cdbus_matchRef
     (
-    cdbus_SignalMatch*  sigMatch
+    cdbus_Match*  match
     )
 {
-    if ( NULL != sigMatch )
+    if ( NULL != match )
     {
-        cdbus_atomicAdd(&sigMatch->refCnt, 1);
+        cdbus_atomicAdd(&match->refCnt, 1);
     }
 
-    return sigMatch;
+    return match;
 }
 
 
 void
-cdbus_signalMatchUnref
+cdbus_matchUnref
     (
-    cdbus_SignalMatch* sigMatch
+    cdbus_Match* match
     )
 {
     cdbus_Int32 value = 0;
     cdbus_Int32 idx;
 
-    if ( NULL != sigMatch )
+    if ( NULL != match )
     {
         /* Returns the previous value */
-       value = cdbus_atomicSub(&sigMatch->refCnt, 1);
+       value = cdbus_atomicSub(&match->refCnt, 1);
 
        assert( 1 <= value );
 
        if ( 1 == value )
        {
-           cdbus_free(sigMatch->rule.signalName);
-           cdbus_free(sigMatch->rule.sender);
-           cdbus_free(sigMatch->rule.objInterface);
-           cdbus_free(sigMatch->rule.path);
-           cdbus_free(sigMatch->rule.arg0Namespace);
-           cdbus_free(sigMatch->rule.localObjPath);
-           cdbus_free(sigMatch->ruleStr);
-           for ( idx = 0; idx < sigMatch->nFilterArgs; idx++ )
+           cdbus_free(match->rule.member);
+           cdbus_free(match->rule.sender);
+           cdbus_free(match->rule.objInterface);
+           cdbus_free(match->rule.path);
+           cdbus_free(match->rule.arg0Namespace);
+           cdbus_free(match->rule.localObjPath);
+           cdbus_free(match->ruleStr);
+           for ( idx = 0; idx < match->nFilterArgs; idx++ )
            {
-               cdbus_free(sigMatch->rule.filterArgs[idx].value);
+               cdbus_free(match->rule.filterArgs[idx].value);
            }
-           cdbus_free(sigMatch->rule.filterArgs);
-           cdbus_free(sigMatch);
+           cdbus_free(match->rule.filterArgs);
+           cdbus_free(match);
            CDBUS_TRACE((CDBUS_TRC_INFO,
-                        "Destroyed the SignalMatch instance (%p)", (void*)sigMatch));
+                        "Destroyed the Match instance (%p)", (void*)match));
        }
     }
 }
 
 
 cdbus_Bool
-cdbus_signalMatchIsMatch
+cdbus_matchIsMatch
     (
-    cdbus_SignalMatch*  sigMatch,
-    DBusMessage*        msg
+    cdbus_Match*    match,
+    DBusMessage*    msg
     )
 {
     cdbus_Bool isMatch = CDBUS_FALSE;
@@ -191,30 +195,82 @@ cdbus_signalMatchIsMatch
     cdbus_Int32 dbusArgIdx = 0;
     cdbus_Int32 lenA;
     cdbus_Int32 lenB;
+    cdbus_Int32 dbusMsgType;
 
-    if ( (NULL != sigMatch) && (NULL != msg) )
+    /*
+     * For more information on match rules please refer to the D-Bus specification here:
+     * http://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
+     */
+
+    if ( (NULL != match) && (NULL != msg) )
     {
-        path = dbus_message_get_path(msg);
-        isMatch = (DBUS_MESSAGE_TYPE_SIGNAL == dbus_message_get_type(msg)) &&
-                  ((sigMatch->rule.signalName == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_member(msg, sigMatch->rule.signalName)) &&
-                  ((sigMatch->rule.sender == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_sender(msg, sigMatch->rule.sender)) &&
-                  ((sigMatch->rule.objInterface == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_interface(msg, sigMatch->rule.objInterface)) &&
-                  ((sigMatch->rule.path == NULL) ? CDBUS_TRUE :
-                      !sigMatch->rule.treatPathAsNamespace ?
-                          dbus_message_has_path(msg, sigMatch->rule.path) :
-                          ((NULL == path) ? CDBUS_FALSE :
-                              ((0 == strncmp(sigMatch->rule.path, path,
-                                            strlen(sigMatch->rule.path)))
-                                               ||
-                               ((NULL == sigMatch->rule.localObjPath) ? CDBUS_FALSE :
-                                   (0 == strncmp(sigMatch->rule.path,
-                                           sigMatch->rule.localObjPath,
-                                           strlen(sigMatch->rule.path)))))));
+        /* Convert the CDBUS message types to a D-Bus equivalent */
+        switch ( match->rule.msgType )
+        {
+            case CDBUS_MATCH_MSG_SIGNAL:
+                dbusMsgType = DBUS_MESSAGE_TYPE_SIGNAL;
+                break;
 
-        if ( isMatch && (0 < sigMatch->nFilterArgs) )
+            case CDBUS_MATCH_MSG_METHOD_CALL:
+                dbusMsgType = DBUS_MESSAGE_TYPE_METHOD_CALL;
+                break;
+
+            case CDBUS_MATCH_MSG_METHOD_RETURN:
+                dbusMsgType = DBUS_MESSAGE_TYPE_METHOD_RETURN;
+                break;
+
+            case CDBUS_MATCH_MSG_ERROR:
+                dbusMsgType = DBUS_MESSAGE_TYPE_ERROR;
+                break;
+
+            case CDBUS_MATCH_MSG_ANY:
+            default:
+                dbusMsgType = DBUS_MESSAGE_TYPE_INVALID;
+                break;
+        }
+
+        path = dbus_message_get_path(msg);
+        isMatch = ((DBUS_MESSAGE_TYPE_INVALID == dbusMsgType) ||
+                    (dbusMsgType == dbus_message_get_type(msg))) &&
+                  ((match->rule.member == NULL) ? CDBUS_TRUE :
+                      dbus_message_has_member(msg, match->rule.member)) &&
+                  ((match->rule.sender == NULL) ? CDBUS_TRUE :
+                      dbus_message_has_sender(msg, match->rule.sender)) &&
+                  ((match->rule.objInterface == NULL) ? CDBUS_TRUE :
+                      dbus_message_has_interface(msg, match->rule.objInterface)) &&
+                  ((match->rule.path == NULL) ? CDBUS_TRUE :
+                      !match->rule.treatPathAsNamespace ?
+                          dbus_message_has_path(msg, match->rule.path) :
+                          ((NULL == path) ? CDBUS_FALSE :
+                              ((0 == strncmp(match->rule.path, path,
+                                            strlen(match->rule.path)))
+                                               ||
+                               ((NULL == match->rule.localObjPath) ? CDBUS_FALSE :
+                                   (0 == strncmp(match->rule.path,
+                                           match->rule.localObjPath,
+                                           strlen(match->rule.path)))))));
+
+        /* Check for a arg0namespace match */
+        if ( isMatch && (NULL != match->rule.arg0Namespace) )
+        {
+            /* Initialization will *only* fail if the message has no arguments */
+            if ( !dbus_message_iter_init(msg, &dbusIter) )
+            {
+                isMatch = CDBUS_FALSE;
+            }
+            else
+            {
+                if ( DBUS_TYPE_STRING == dbus_message_iter_get_arg_type(&dbusIter) )
+                {
+                    dbus_message_iter_get_basic(&dbusIter, &value);
+                    isMatch = (0 == strncmp(match->rule.arg0Namespace, value,
+                                strlen(match->rule.arg0Namespace)));
+                }
+            }
+        }
+
+        /* Check for argN matches */
+        if ( isMatch && (0 < match->nFilterArgs) )
         {
             /* Initialization will *only* fail if the message has no arguments */
             if ( !dbus_message_iter_init(msg, &dbusIter) )
@@ -226,7 +282,7 @@ cdbus_signalMatchIsMatch
                 /* Since the filter args are sorted by increasing argument
                  * index the last one *must* have the largest index.
                  */
-                maxArgN = sigMatch->rule.filterArgs[sigMatch->nFilterArgs - 1].argN;
+                maxArgN = match->rule.filterArgs[match->nFilterArgs - 1].argN;
 
                 /* Iterate over the message arguments while there is a match */
                 while ( ((curDbusType = dbus_message_iter_get_arg_type(&dbusIter)) != DBUS_TYPE_INVALID) &&
@@ -237,12 +293,12 @@ cdbus_signalMatchIsMatch
                     {
                         value = NULL;
                         dbus_message_iter_get_basic(&dbusIter, &value);
-                        for ( idx = 0; (idx < sigMatch->nFilterArgs) && isMatch; idx++ )
+                        for ( idx = 0; (idx < match->nFilterArgs) && isMatch; idx++ )
                         {
                             /* If this is the message argument index we need to test */
-                            if ( sigMatch->rule.filterArgs[idx].argN == dbusArgIdx )
+                            if ( match->rule.filterArgs[idx].argN == dbusArgIdx )
                             {
-                                if ( NULL == sigMatch->rule.filterArgs[idx].value )
+                                if ( NULL == match->rule.filterArgs[idx].value )
                                 {
                                     /* A NULL filter matches everything */
                                     nArgMatches++;
@@ -256,10 +312,10 @@ cdbus_signalMatchIsMatch
                                 else
                                 {
                                     /* ArgN matches can *only* match on D-Bus strings */
-                                    if ( (CDBUS_FILTER_ARG == sigMatch->rule.filterArgs[idx].argType) &&
+                                    if ( (CDBUS_FILTER_ARG == match->rule.filterArgs[idx].argType) &&
                                         (DBUS_TYPE_STRING == curDbusType) )
                                     {
-                                        if ( 0 == strcmp(sigMatch->rule.filterArgs[idx].value, value) )
+                                        if ( 0 == strcmp(match->rule.filterArgs[idx].value, value) )
                                         {
                                             nArgMatches++;
                                         }
@@ -272,10 +328,10 @@ cdbus_signalMatchIsMatch
                                     /* Else this must be an argPath rule. It can match on D-Bus strings or
                                      * object path types.
                                      * */
-                                    else if ( (CDBUS_FILTER_ARG_PATH == sigMatch->rule.filterArgs[idx].argType) )
+                                    else if ( (CDBUS_FILTER_ARG_PATH == match->rule.filterArgs[idx].argType) )
                                     {
                                         /* If they're identical values then ... */
-                                        if ( 0 == strcmp(sigMatch->rule.filterArgs[idx].value, value) )
+                                        if ( 0 == strcmp(match->rule.filterArgs[idx].value, value) )
                                         {
                                             nArgMatches++;
                                         }
@@ -283,12 +339,12 @@ cdbus_signalMatchIsMatch
                                         else
                                         {
                                             lenA = strlen(value);
-                                            lenB = strlen(sigMatch->rule.filterArgs[idx].value);
+                                            lenB = strlen(match->rule.filterArgs[idx].value);
                                             if ( ((0 < lenA) && ('/' == value[lenA-1]) &&
-                                                (0 == strncmp(value, sigMatch->rule.filterArgs[idx].value, lenA)))
+                                                (0 == strncmp(value, match->rule.filterArgs[idx].value, lenA)))
                                                                     ||
-                                                ((0 < lenB) && ('/' == sigMatch->rule.filterArgs[idx].value[lenB-1]) &&
-                                                (0 == strncmp(sigMatch->rule.filterArgs[idx].value, value, lenB))) )
+                                                ((0 < lenB) && ('/' == match->rule.filterArgs[idx].value[lenB-1]) &&
+                                                (0 == strncmp(match->rule.filterArgs[idx].value, value, lenB))) )
                                             {
                                                 nArgMatches++;
                                             }
@@ -309,10 +365,10 @@ cdbus_signalMatchIsMatch
                 }
 
                 /* Now that we've looped through all the message arguments we must make sure
-                 * that all the arguments if the filter were matched successfully against
+                 * that all the arguments of the filter were matched successfully against
                  * the message arguments.
                  */
-                if ( nArgMatches != sigMatch->nFilterArgs )
+                if ( nArgMatches != match->nFilterArgs )
                 {
                     isMatch = CDBUS_FALSE;
                 }
@@ -324,97 +380,138 @@ cdbus_signalMatchIsMatch
 
 
 void
-cdbus_signalMatchDispatch
+cdbus_matchDispatch
     (
     struct cdbus_Connection*    conn,
-    cdbus_SignalMatch*          sigMatch,
+    cdbus_Match*                match,
     DBusMessage*                msg
     )
 {
-    if ( (NULL != sigMatch) && (NULL != msg) )
+    if ( (NULL != match) && (NULL != msg) )
     {
-        if ( NULL != sigMatch->handler )
+        if ( NULL != match->handler )
         {
-            sigMatch->handler(conn, sigMatch, msg, sigMatch->userData);
+            match->handler(conn, match, msg, match->userData);
         }
     }
 }
 
 
 const cdbus_Char*
-cdbus_signalMatchGetRule
+cdbus_matchGetRule
     (
-    cdbus_SignalMatch*  sigMatch
+    cdbus_Match*  match
     )
 {
     cdbus_Char* rule = NULL;
     cdbus_Int32 idx = 0;
     const cdbus_Char* fmt;
 
-    if ( NULL != sigMatch )
+    if ( NULL != match )
     {
-        if ( NULL != sigMatch->ruleStr )
+        if ( NULL != match->ruleStr )
         {
-            rule = sigMatch->ruleStr;
+            rule = match->ruleStr;
         }
         else
         {
             cdbus_StringBuffer* sb = cdbus_stringBufferNew(DBUS_MAXIMUM_MATCH_RULE_LENGTH);
             if ( NULL != sb )
             {
-                cdbus_stringBufferAppendFormat(sb, "type='signal'");
-                if ( NULL != sigMatch->rule.signalName )
+                if ( CDBUS_MATCH_MSG_SIGNAL == match->rule.msgType )
                 {
-                    cdbus_stringBufferAppendFormat(sb, ",member='%s'", sigMatch->rule.signalName);
+                    cdbus_stringBufferAppendFormat(sb, "type='signal'");
+                }
+                else if ( CDBUS_MATCH_MSG_METHOD_CALL == match->rule.msgType )
+                {
+                    cdbus_stringBufferAppendFormat(sb, "type='method_call'");
+                }
+                else if ( CDBUS_MATCH_MSG_METHOD_RETURN == match->rule.msgType )
+                {
+                    cdbus_stringBufferAppendFormat(sb, "type='method_return'");
+                }
+                else if ( CDBUS_MATCH_MSG_ERROR == match->rule.msgType )
+                {
+                    cdbus_stringBufferAppendFormat(sb, "type='error'");
                 }
 
-                if ( NULL != sigMatch->rule.sender )
+                if ( NULL != match->rule.member )
                 {
-                    cdbus_stringBufferAppendFormat(sb, ",sender='%s'", sigMatch->rule.sender);
+                    cdbus_stringBufferAppendFormat(sb, "%smember='%s'",
+                        cdbus_stringBufferIsEmpty(sb) ? "":",", match->rule.member);
                 }
 
-                if ( NULL != sigMatch->rule.objInterface )
+                if ( NULL != match->rule.sender )
                 {
-                    cdbus_stringBufferAppendFormat(sb, ",interface='%s'", sigMatch->rule.objInterface);
+                    cdbus_stringBufferAppendFormat(sb, "%ssender='%s'",
+                        cdbus_stringBufferIsEmpty(sb) ? "":",", match->rule.sender);
                 }
 
-                if ( NULL != sigMatch->rule.path )
+                if ( NULL != match->rule.objInterface )
                 {
-                    if ( sigMatch->rule.treatPathAsNamespace )
+                    cdbus_stringBufferAppendFormat(sb, "%sinterface='%s'",
+                        cdbus_stringBufferIsEmpty(sb) ? "":",", match->rule.objInterface);
+                }
+
+                if ( NULL != match->rule.path )
+                {
+                    if ( match->rule.treatPathAsNamespace )
                     {
-                        cdbus_stringBufferAppendFormat(sb, ",path_namespace='%s'", sigMatch->rule.path);
+                        cdbus_stringBufferAppendFormat(sb, "%spath_namespace='%s'",
+                            cdbus_stringBufferIsEmpty(sb) ? "":",", match->rule.path);
                     }
                     else
                     {
-                        cdbus_stringBufferAppendFormat(sb, ",path='%s'", sigMatch->rule.path);
+                        cdbus_stringBufferAppendFormat(sb, "%spath='%s'",
+                            cdbus_stringBufferIsEmpty(sb) ? "":",", match->rule.path);
                     }
                 }
 
-                for ( idx = 0; idx < sigMatch->nFilterArgs; ++idx )
+#if DBUS_VERSION >= 0x010506
+                cdbus_stringBufferAppendFormat(sb, "%seavesdrop='%s'",
+                    cdbus_stringBufferIsEmpty(sb) ? "":",",
+                    match->rule.eavesdrop ? "true" : "false");
+#endif
+
+                for ( idx = 0; idx < match->nFilterArgs; ++idx )
                 {
-                    if ( NULL != sigMatch->rule.filterArgs[idx].value )
+                    if ( NULL != match->rule.filterArgs[idx].value )
                     {
-                        if ( CDBUS_FILTER_ARG == sigMatch->rule.filterArgs[idx].argType )
+                        if ( CDBUS_FILTER_ARG == match->rule.filterArgs[idx].argType )
                         {
-                            fmt = ",arg%u='%s'";
+                            if ( cdbus_stringBufferIsEmpty(sb) )
+                            {
+                                fmt = "arg%u='%s'";
+                            }
+                            else
+                            {
+                                fmt = ",arg%u='%s'";
+                            }
                         }
-                        else if ( CDBUS_FILTER_ARG_PATH == sigMatch->rule.filterArgs[idx].argType )
+                        else if ( CDBUS_FILTER_ARG_PATH == match->rule.filterArgs[idx].argType )
                         {
-                            fmt = ",arg%upath='%s'";
+                            if ( cdbus_stringBufferIsEmpty(sb) )
+                            {
+                                fmt = "arg%upath='%s'";
+                            }
+                            else
+                            {
+                                fmt = ",arg%upath='%s'";
+                            }
                         }
                         else
                         {
                             fmt = "";
                         }
-                        cdbus_stringBufferAppendFormat(sb, fmt, sigMatch->rule.filterArgs[idx].argN,
-                                                       sigMatch->rule.filterArgs[idx].value);
+                        cdbus_stringBufferAppendFormat(sb, fmt, match->rule.filterArgs[idx].argN,
+                                                       match->rule.filterArgs[idx].value);
                     }
                 }
 
                 if ( cdbus_stringBufferLength(sb) <= DBUS_MAXIMUM_MATCH_RULE_LENGTH )
                 {
                     rule = cdbus_strDup(cdbus_stringBufferRaw(sb));
-                    sigMatch->ruleStr = rule;
+                    match->ruleStr = rule;
                 }
                 cdbus_stringBufferUnref(sb);
             }
@@ -426,9 +523,9 @@ cdbus_signalMatchGetRule
 
 
 static cdbus_Bool
-cdbus_signalMatchModifyFilter
+cdbus_matchModifyFilter
     (
-    cdbus_SignalMatch*          sigMatch,
+    cdbus_Match*                match,
     struct cdbus_Connection*    conn,
     cdbus_Bool                  add
     )
@@ -437,9 +534,9 @@ cdbus_signalMatchModifyFilter
     DBusError dbusError;
     const cdbus_Char* rule;
 
-    if ( (NULL != sigMatch) && (NULL != conn) )
+    if ( (NULL != match) && (NULL != conn) )
     {
-        rule = cdbus_signalMatchGetRule(sigMatch);
+        rule = cdbus_matchGetRule(match);
         if ( NULL != rule )
         {
             dbus_error_init(&dbusError);
@@ -477,24 +574,24 @@ cdbus_signalMatchModifyFilter
 
 
 cdbus_Bool
-cdbus_signalMatchAddFilter
+cdbus_matchAddFilter
     (
-    cdbus_SignalMatch*          sigMatch,
+    cdbus_Match*                match,
     struct cdbus_Connection*    conn
     )
 {
-    return cdbus_signalMatchModifyFilter(sigMatch, conn, CDBUS_TRUE);
+    return cdbus_matchModifyFilter(match, conn, CDBUS_TRUE);
 }
 
 
 cdbus_Bool
-cdbus_signalMatchRemoveFilter
+cdbus_matchRemoveFilter
     (
-    cdbus_SignalMatch*          sigMatch,
+    cdbus_Match*                match,
     struct cdbus_Connection*    conn
     )
 {
-    return cdbus_signalMatchModifyFilter(sigMatch, conn, CDBUS_FALSE);
+    return cdbus_matchModifyFilter(match, conn, CDBUS_FALSE);
 }
 
 

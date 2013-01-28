@@ -51,19 +51,31 @@ typedef struct cdbus_FilterArgItem
     cdbus_Char*         value;
 } cdbus_FilterArgItem;
 
-typedef struct cdbus_SignalRule
-{
-    cdbus_Char* signalName;
-    cdbus_Char* objInterface;
-    cdbus_Char* sender;
-    cdbus_Char* path;
-    cdbus_Bool treatPathAsNamespace;
-    cdbus_Char* localObjPath;
-    cdbus_Char* arg0Namespace;
-    cdbus_FilterArgItem* filterArgs;
-} cdbus_SignalRule;
+typedef enum {
+    CDBUS_MATCH_MSG_ANY,
+    CDBUS_MATCH_MSG_METHOD_CALL,
+    CDBUS_MATCH_MSG_METHOD_RETURN,
+    CDBUS_MATCH_MSG_SIGNAL,
+    CDBUS_MATCH_MSG_ERROR
+} cdbus_MatchMsgType;
 
-typedef void (*cdbus_connectionSignalHandler)(cdbus_Connection* conn, cdbus_Handle hnd,
+typedef struct cdbus_MatchRule
+{
+    cdbus_MatchMsgType      msgType;
+    cdbus_Char*             member;
+    cdbus_Char*             objInterface;
+    cdbus_Char*             sender;
+    cdbus_Char*             path;
+    cdbus_Bool              treatPathAsNamespace;
+    cdbus_Char*             localObjPath;
+    cdbus_Char*             arg0Namespace;
+    cdbus_FilterArgItem*    filterArgs;
+#if DBUS_VERSION >= 0x010506
+    cdbus_Bool              eavesdrop;
+#endif
+} cdbus_MatchRule;
+
+typedef void (*cdbus_connectionMatchHandler)(cdbus_Connection* conn, cdbus_Handle hnd,
                                                 DBusMessage* msg, void* userData);
 
 CDBUS_EXPORT cdbus_Connection* cdbus_connectionOpen(struct cdbus_Dispatcher* disp, const cdbus_Char* address,
@@ -81,13 +93,13 @@ CDBUS_EXPORT cdbus_Bool cdbus_connectionSendWithReply(cdbus_Connection* conn, DB
                                                     DBusPendingCallNotifyFunction  notifyFunc,
                                                     void* userData, DBusFreeFunction freeUserDataFunc);
 
-CDBUS_EXPORT cdbus_Handle cdbus_connectionRegSigHandler(
+CDBUS_EXPORT cdbus_Handle cdbus_connectionRegMatchHandler(
                                                     cdbus_Connection* conn,
-                                                    cdbus_connectionSignalHandler handler,
+                                                    cdbus_connectionMatchHandler handler,
                                                     void* userData,
-                                                    const cdbus_SignalRule* rule,
+                                                    const cdbus_MatchRule* rule,
                                                     cdbus_HResult* hResult);
-CDBUS_EXPORT cdbus_HResult cdbus_connectionUnregSigHandler(
+CDBUS_EXPORT cdbus_HResult cdbus_connectionUnregMatchHandler(
                                                     cdbus_Connection* conn,
                                                     cdbus_Handle regHnd);
 
