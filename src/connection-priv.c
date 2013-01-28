@@ -747,8 +747,10 @@ cdbus_connectionUnregSigHandler
             if ( (cdbus_SignalMatch*)regHnd == sigMatch )
             {
                 /* If this function was called from a signal handler
-                 * callback and we're trying to unregister the our
-                 * "next" handler to call then bump it forward.
+                 * callback then we may be trying to unregister the
+                 * "next" match in the list. If so bump the "next"
+                 * match forward one to skip over the match we're going
+                 * to remove.
                  */
                 if ( sigMatch == conn->nextSigMatch )
                 {
