@@ -34,20 +34,10 @@ CDBUS_BEGIN_DECLS
 /* Forward declarations */
 struct DBusMessage;
 
-#define CDBUS_TRC_OFF   (0)
-#define CDBUS_TRC_FATAL (1 << 5)
-#define CDBUS_TRC_ERROR (1 << 4)
-#define CDBUS_TRC_WARN  (1 << 3)
-#define CDBUS_TRC_INFO  (1 << 2)
-#define CDBUS_TRC_DEBUG (1 << 1)
-#define CDBUS_TRC_TRACE (1 << 0)
-#define CDBUS_TRC_ALL   (~CDBUS_TRC_OFF)
 
 int cdbus_traceIsEnabled(unsigned level, ...);
 void cdbus_tracePrintPrefix(int isEnabled, const char* file, const char* funcName, unsigned line);
 void cdbus_trace(cdbus_UInt32 level, const cdbus_Char* fmt, ...);
-void cdbus_traceSetMask(cdbus_UInt32 mask);
-cdbus_UInt32 cdbus_traceGetMask();
 void cdbus_traceMessage(cdbus_UInt32 level, struct DBusMessage* msg);
 
 /*

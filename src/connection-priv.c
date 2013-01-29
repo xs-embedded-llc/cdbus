@@ -150,31 +150,28 @@ cdbus_connectionFilterHandler
 
     CDBUS_UNUSED(dbusConn);
 
-    if ( DBUS_MESSAGE_TYPE_SIGNAL == dbus_message_get_type(msg) )
+    if ( NULL != conn )
     {
-        if ( NULL != conn )
+        /* Only for private connections do you have to look
+         * for the Disconnect signal before finalizing the
+         * connection.
+         */
+        if ( conn->isPrivate &&
+            dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
+            dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
         {
-            /* Only for private connections do you have to look
-             * for the Disconnect signal before finalizing the
-             * connection.
-             */
-            if ( conn->isPrivate &&
-                dbus_message_is_signal(msg, DBUS_INTERFACE_LOCAL, "Disconnected") &&
-                dbus_message_has_path(msg, DBUS_PATH_LOCAL) )
+            rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
+            if ( CDBUS_FAILED(rc) )
             {
-                rc = cdbus_dispatcherRemoveConnection(conn->dispatcher, conn);
-                if ( CDBUS_FAILED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR,
-                           "Failed to remove the connection (rc=0x%02X)", rc));
-                }
-                result = DBUS_HANDLER_RESULT_HANDLED;
+                CDBUS_TRACE((CDBUS_TRC_ERROR,
+                       "Failed to remove the connection (rc=0x%02X)", rc));
             }
-            else
-            {
-                /* Dispatch the message to any registered handlers */
-                result = cdbus_connectionDispatchSignalMatches(conn, msg);
-            }
+            result = DBUS_HANDLER_RESULT_HANDLED;
+        }
+        else
+        {
+            /* Dispatch the message to any registered handlers */
+            result = cdbus_connectionDispatchMatches(conn, msg);
         }
     }
 
@@ -779,7 +776,7 @@ cdbus_connectionUnregMatchHandler
 
 
 DBusHandlerResult
-cdbus_connectionDispatchSignalMatches
+cdbus_connectionDispatchMatches
     (
     cdbus_Connection*   conn,
     DBusMessage*        msg
@@ -791,6 +788,15 @@ cdbus_connectionDispatchSignalMatches
     if ( (NULL != conn) && (NULL != msg) )
     {
         CDBUS_LOCK(conn->lock);
+
+        /* Since there may be more than one match for a
+         * given message we need to increment the reference
+         * count for this message before we pass this message
+         * around in case one of the match handlers tries to
+         * unreference it. Ultimately, I handler that wishes to
+         * keep
+         */
+        dbus_message_ref(msg);
 
         for ( match = LIST_FIRST(&conn->matches);
             match != LIST_END(&conn->matches);
@@ -810,6 +816,9 @@ cdbus_connectionDispatchSignalMatches
                 result = DBUS_HANDLER_RESULT_HANDLED;
             }
         }
+
+        dbus_message_unref(msg);
+
         /* Reset for the next time this is called */
         conn->nextMatch = LIST_END(&conn->matches);
         CDBUS_UNLOCK(conn->lock);

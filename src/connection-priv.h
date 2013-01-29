@@ -56,7 +56,7 @@ cdbus_Connection* cdbus_connectionNew(struct cdbus_Dispatcher* disp,
 DBusHandlerResult cdbus_connectionFilterHandler(DBusConnection* dbusConn,
                          DBusMessage* msg, void* data);
 
-DBusHandlerResult cdbus_connectionDispatchSignalMatches(cdbus_Connection* conn,
+DBusHandlerResult cdbus_connectionDispatchMatches(cdbus_Connection* conn,
                                                          DBusMessage* msg);
 
 CDBUS_END_DECLS

@@ -1,5 +1,5 @@
 /*******************************************************************************
- *
+ * 
  * Project         cdbus
  * (c) Copyright   2012 XS-Embedded LLC
  *                 All rights reserved
@@ -18,27 +18,34 @@
  *
  *******************************************************************************
  *******************************************************************************
- * @file           cdbus.h
+ * @file           tracectrl.h
  * @author         Glenn Schmottlach
- * @brief          Top-level include file for cdbus library.
+ * @brief          Declaration of routines to enable/disable traces.
  *******************************************************************************
  */
 
-#ifndef CDBUS_CDBUS_H_
-#define CDBUS_CDBUS_H_
+#ifndef CDBUS_TRACECTRL_H_
+#define CDBUS_TRACECTRL_H_
 
-#include "cdbus/macros.h"
 #include "cdbus/types.h"
-#include "cdbus/error.h"
-#include "cdbus/init.h"
-#include "cdbus/connection.h"
-#include "cdbus/dispatcher.h"
-#include "cdbus/watch.h"
-#include "cdbus/timeout.h"
-#include "cdbus/object.h"
-#include "cdbus/interface.h"
-#include "cdbus/introspect.h"
-#include "cdbus/stringbuffer.h"
-#include "cdbus/tracectrl.h"
 
-#endif /* Guard for CDBUS_CDBUS_H_ */
+CDBUS_BEGIN_DECLS
+
+
+#define CDBUS_TRC_OFF   (0)
+#define CDBUS_TRC_FATAL (1 << 5)
+#define CDBUS_TRC_ERROR (1 << 4)
+#define CDBUS_TRC_WARN  (1 << 3)
+#define CDBUS_TRC_INFO  (1 << 2)
+#define CDBUS_TRC_DEBUG (1 << 1)
+#define CDBUS_TRC_TRACE (1 << 0)
+#define CDBUS_TRC_ALL   (CDBUS_TRC_FATAL | CDBUS_TRC_ERROR | \
+                        CDBUS_TRC_WARN | CDBUS_TRC_INFO | \
+                        CDBUS_TRC_DEBUG | CDBUS_TRC_TRACE)
+
+void cdbus_traceSetMask(cdbus_UInt32 mask);
+cdbus_UInt32 cdbus_traceGetMask();
+
+CDBUS_END_DECLS
+
+#endif /* Guard for CDBUS_TRACECTRL_H_ */
