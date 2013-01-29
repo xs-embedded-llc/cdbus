@@ -70,9 +70,7 @@ typedef struct cdbus_MatchRule
     cdbus_Char*             localObjPath;
     cdbus_Char*             arg0Namespace;
     cdbus_FilterArgItem*    filterArgs;
-#if DBUS_VERSION >= 0x010506
     cdbus_Bool              eavesdrop;
-#endif
 } cdbus_MatchRule;
 
 typedef void (*cdbus_connectionMatchHandler)(cdbus_Connection* conn, cdbus_Handle hnd,

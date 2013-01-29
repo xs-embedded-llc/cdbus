@@ -74,9 +74,7 @@ cdbus_matchNew
             obj->rule.arg0Namespace = cdbus_strDup(rule->arg0Namespace);
             obj->rule.treatPathAsNamespace = rule->treatPathAsNamespace;
             obj->rule.localObjPath = cdbus_strDup(rule->localObjPath);
-#if DBUS_VERSION >= 0x010506
             obj->rule.eavesdrop = rule->eavesdrop;
-#endif
 
             /* Count the number of filter arguments */
             obj->nFilterArgs = 0U;
