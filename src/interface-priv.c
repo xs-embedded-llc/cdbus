@@ -96,6 +96,7 @@ cdbus_interfaceFreeMethodList
             curMethod = nextMethod )
         {
             nextMethod = LIST_NEXT(curMethod, link);
+            LIST_REMOVE(curMethod, link);
             cdbus_interfaceDestroyItem(curMethod);
             cdbus_free(curMethod);
         }
@@ -118,6 +119,7 @@ cdbus_interfaceFreeSignalList
             curSignal = nextSignal )
         {
             nextSignal = LIST_NEXT(curSignal, link);
+            LIST_REMOVE(curSignal, link);
             cdbus_interfaceDestroyItem(curSignal);
             cdbus_free(curSignal);
         }
@@ -140,6 +142,7 @@ cdbus_interfaceFreePropertyList
             curProp = nextProp )
         {
             nextProp = LIST_NEXT(curProp, link);
+            LIST_REMOVE(curProp, link);
             cdbus_interfaceDestroyProperty(curProp);
             cdbus_free(curProp);
         }
@@ -346,7 +349,7 @@ cdbus_interfaceRegisterItems
                 item->args[argIdx].xferDir = methods[idx].args[argIdx].xferDir;
                 item->args[argIdx].name = cdbus_strDup(methods[idx].args[argIdx].name);
                 item->args[argIdx].signature = cdbus_strDup(methods[idx].args[argIdx].signature);
-                if ( (NULL == item->args[argIdx].signature) || (NULL == item->args[argIdx].name) )
+                if ( NULL == item->args[argIdx].signature )
                 {
                     cdbus_interfaceDestroyItem(item);
                     cdbus_free(item);
@@ -419,6 +422,25 @@ cdbus_interfaceRegisterMethods
 
 
 cdbus_Bool
+cdbus_interfaceClearMethods
+    (
+    cdbus_Interface*    intf
+    )
+{
+    cdbus_Bool isCleared = CDBUS_FALSE;
+
+    if ( NULL != intf )
+    {
+        CDBUS_LOCK(intf->lock);
+        cdbus_interfaceFreeMethodList(intf);
+        CDBUS_UNLOCK(intf->lock);
+        isCleared = CDBUS_TRUE;
+    }
+    return isCleared;
+}
+
+
+cdbus_Bool
 cdbus_interfaceRegisterSignals
     (
     cdbus_Interface*                intf,
@@ -434,6 +456,25 @@ cdbus_interfaceRegisterSignals
                                         numSignals, &intf->signals);
     }
     return isRegistered;
+}
+
+
+cdbus_Bool
+cdbus_interfaceClearSignals
+    (
+    cdbus_Interface*    intf
+    )
+{
+    cdbus_Bool isCleared = CDBUS_FALSE;
+
+    if ( NULL != intf )
+    {
+        CDBUS_LOCK(intf->lock);
+        cdbus_interfaceFreeSignalList(intf);
+        CDBUS_UNLOCK(intf->lock);
+        isCleared = CDBUS_TRUE;
+    }
+    return isCleared;
 }
 
 
@@ -532,6 +573,25 @@ cdbus_interfaceRegisterProperties
 }
 
 
+cdbus_Bool
+cdbus_interfaceClearProperties
+    (
+    cdbus_Interface*    intf
+    )
+{
+    cdbus_Bool isCleared = CDBUS_FALSE;
+
+    if ( NULL != intf )
+    {
+        CDBUS_LOCK(intf->lock);
+        cdbus_interfaceFreePropertyList(intf);
+        CDBUS_UNLOCK(intf->lock);
+        isCleared = CDBUS_TRUE;
+    }
+    return isCleared;
+}
+
+
 cdbus_StringBuffer*
 cdbus_interfaceIntrospect
     (
@@ -558,12 +618,23 @@ cdbus_interfaceIntrospect
 
                 for ( idx = 0U; idx < item->nArgs; idx++ )
                 {
-                    cdbus_stringBufferAppendFormat(sb,
-                        "      <arg name=\"%s\" type=\"%s\" direction=\"%s\"/>\n",
-                        item->args[idx].name,
-                        item->args[idx].signature,
-                        (item->args[idx].xferDir == CDBUS_XFER_IN) ? "in":"out"
-                        );
+                    if ( NULL == item->args[idx].name )
+                    {
+                        cdbus_stringBufferAppendFormat(sb,
+                            "      <arg type=\"%s\" direction=\"%s\"/>\n",
+                            item->args[idx].signature,
+                            (item->args[idx].xferDir == CDBUS_XFER_IN) ? "in":"out"
+                            );
+                    }
+                    else
+                    {
+                        cdbus_stringBufferAppendFormat(sb,
+                            "      <arg name=\"%s\" type=\"%s\" direction=\"%s\"/>\n",
+                            item->args[idx].name,
+                            item->args[idx].signature,
+                            (item->args[idx].xferDir == CDBUS_XFER_IN) ? "in":"out"
+                            );
+                    }
                 }
                 cdbus_stringBufferAppendFormat(sb, "    </method>\n");
             }
@@ -574,10 +645,19 @@ cdbus_interfaceIntrospect
                                                 item->name);
                 for ( idx = 0U; idx < item->nArgs; idx++ )
                 {
-                    cdbus_stringBufferAppendFormat(sb,
-                        "      <arg name=\"%s\" type=\"%s\" direction=\"out\"/>\n",
-                        item->args[idx].name,
-                        item->args[idx].signature);
+                    if ( NULL == item->args[idx].name )
+                    {
+                        cdbus_stringBufferAppendFormat(sb,
+                            "      <arg type=\"%s\" direction=\"out\"/>\n",
+                            item->args[idx].signature);
+                    }
+                    else
+                    {
+                        cdbus_stringBufferAppendFormat(sb,
+                            "      <arg name=\"%s\" type=\"%s\" direction=\"out\"/>\n",
+                            item->args[idx].name,
+                            item->args[idx].signature);
+                    }
                 }
                 cdbus_stringBufferAppendFormat(sb, "    </signal>\n");
             }

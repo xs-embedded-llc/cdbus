@@ -88,12 +88,15 @@ CDBUS_EXPORT void* cdbus_interfaceGetData(cdbus_Interface* intf);
 CDBUS_EXPORT cdbus_Bool cdbus_interfaceRegisterMethods(cdbus_Interface* intf,
                             const cdbus_DbusIntrospectItem* methods,
                             cdbus_UInt32 numMethods);
+CDBUS_EXPORT cdbus_Bool cdbus_interfaceClearMethods(cdbus_Interface* intf);
 CDBUS_EXPORT cdbus_Bool cdbus_interfaceRegisterSignals(cdbus_Interface* intf,
                             const cdbus_DbusIntrospectItem* signals,
                             cdbus_UInt32 numSignals);
+CDBUS_EXPORT cdbus_Bool cdbus_interfaceClearSignals(cdbus_Interface* intf);
 CDBUS_EXPORT cdbus_Bool cdbus_interfaceRegisterProperties(cdbus_Interface* intf,
                             const cdbus_DbusIntrospectProperty* properties,
                             cdbus_UInt32 numProperties);
+CDBUS_EXPORT cdbus_Bool cdbus_interfaceClearProperties(cdbus_Interface* intf);
 CDBUS_EXPORT cdbus_StringBuffer* cdbus_interfaceIntrospect(cdbus_Interface* intf);
 
 
