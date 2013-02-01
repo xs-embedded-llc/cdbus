@@ -31,7 +31,7 @@
 #include "trace.h"
 #include "internal.h"
 
-static const cdbus_DbusIntrospectArgs cdbus_introspectArg[] =
+static cdbus_DbusIntrospectArgs cdbus_introspectArg[] =
 {
     {"xmlData", "s", CDBUS_XFER_OUT}
 };

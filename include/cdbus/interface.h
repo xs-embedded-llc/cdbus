@@ -48,27 +48,27 @@ typedef enum
 
 typedef struct cdbus_DbusIntrospectArgs
 {
-    const cdbus_Char*   name;
-    const cdbus_Char*   signature;
+    cdbus_Char*         name;
+    cdbus_Char*         signature;
     cdbus_TransferDir   xferDir;
 } cdbus_DbusIntrospectArgs;
 
 
 typedef struct cdbus_DbusIntrospectItem
 {
-    const cdbus_Char*               name;
-    const cdbus_DbusIntrospectArgs* args;
-    cdbus_UInt32                    nArgs;
+    cdbus_Char*                 name;
+    cdbus_DbusIntrospectArgs*   args;
+    cdbus_UInt32                nArgs;
 
 } cdbus_DbusIntrospectItem;
 
 
 typedef struct cdbus_DbusIntrospectProperty
 {
-    const cdbus_Char*   name;
-    const cdbus_Char*   signature;
-    cdbus_Bool          read;
-    cdbus_Bool          write;
+    cdbus_Char* name;
+    cdbus_Char* signature;
+    cdbus_Bool  read;
+    cdbus_Bool  write;
 } cdbus_DbusIntrospectProperty;
 
 
