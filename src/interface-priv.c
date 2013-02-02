@@ -334,13 +334,16 @@ cdbus_interfaceRegisterItems
                 break;
             }
 
-            item->args = cdbus_calloc(methods[idx].nArgs, sizeof(*item->args));
-            if ( NULL == item->args )
+            if ( 0 < methods[idx].nArgs )
             {
-                cdbus_interfaceDestroyItem(item);
-                cdbus_free(item);
-                isRegistered = CDBUS_FALSE;
-                break;
+                item->args = cdbus_calloc(methods[idx].nArgs, sizeof(*item->args));
+                if ( NULL == item->args )
+                {
+                    cdbus_interfaceDestroyItem(item);
+                    cdbus_free(item);
+                    isRegistered = CDBUS_FALSE;
+                    break;
+                }
             }
 
             item->nArgs = 0U;
@@ -695,7 +698,10 @@ cdbus_interfaceHandleMessage
         (NULL != conn) &&
         (NULL != msg) )
     {
-        result = intf->handler(conn, obj, msg, intf->userData);
+        if ( NULL != intf->handler )
+        {
+            result = intf->handler(conn, obj, msg, intf->userData);
+        }
     }
 
 
