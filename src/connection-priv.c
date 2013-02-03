@@ -789,15 +789,6 @@ cdbus_connectionDispatchMatches
     {
         CDBUS_LOCK(conn->lock);
 
-        /* Since there may be more than one match for a
-         * given message we need to increment the reference
-         * count for this message before we pass this message
-         * around in case one of the match handlers tries to
-         * unreference it. Ultimately, I handler that wishes to
-         * keep
-         */
-        dbus_message_ref(msg);
-
         for ( match = LIST_FIRST(&conn->matches);
             match != LIST_END(&conn->matches);
             match = conn->nextMatch )
@@ -816,8 +807,6 @@ cdbus_connectionDispatchMatches
                 result = DBUS_HANDLER_RESULT_HANDLED;
             }
         }
-
-        dbus_message_unref(msg);
 
         /* Reset for the next time this is called */
         conn->nextMatch = LIST_END(&conn->matches);
