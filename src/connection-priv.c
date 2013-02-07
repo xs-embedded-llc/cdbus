@@ -39,6 +39,10 @@
 #include "internal.h"
 #include "match.h"
 
+#ifndef DBUS_SYSTEM_BUS_DEFAULT_ADDRESS
+#define DBUS_SYSTEM_BUS_DEFAULT_ADDRESS "unix:path=/var/run/dbus/system_bus_socket"
+#endif
+
 typedef struct cdbus_ObjectConnBinding
 {
     cdbus_Object*       obj;
@@ -396,6 +400,15 @@ cdbus_connectionOpenStandard
     {
         case DBUS_BUS_SYSTEM:
             addr = getenv("DBUS_SYSTEM_BUS_ADDRESS");
+            if ( NULL == addr )
+            {
+                /* Try to use the default (hard-coded) address
+                 * if the environment variable isn't defined. This
+                 * is typically found in the config.h file when the
+                 * D-Bus reference library is built.
+                 */
+                addr = DBUS_SYSTEM_BUS_DEFAULT_ADDRESS;
+            }
             break;
 
         case DBUS_BUS_SESSION:
