@@ -73,7 +73,6 @@ cdbus_matchNew
             obj->rule.path = cdbus_strDup(rule->path);
             obj->rule.arg0Namespace = cdbus_strDup(rule->arg0Namespace);
             obj->rule.treatPathAsNamespace = rule->treatPathAsNamespace;
-            obj->rule.localObjPath = cdbus_strDup(rule->localObjPath);
             obj->rule.eavesdrop = rule->eavesdrop;
 
             /* Count the number of filter arguments */
@@ -160,7 +159,6 @@ cdbus_matchUnref
            cdbus_free(match->rule.objInterface);
            cdbus_free(match->rule.path);
            cdbus_free(match->rule.arg0Namespace);
-           cdbus_free(match->rule.localObjPath);
            cdbus_free(match->ruleStr);
            for ( idx = 0; idx < match->nFilterArgs; idx++ )
            {
@@ -228,25 +226,61 @@ cdbus_matchIsMatch
         }
 
         path = dbus_message_get_path(msg);
+
+        /* If the message type is not specified OR it's specified and it's
+         * the expected message type.
+         */
         isMatch = ((DBUS_MESSAGE_TYPE_INVALID == dbusMsgType) ||
-                    (dbusMsgType == dbus_message_get_type(msg))) &&
-                  ((match->rule.member == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_member(msg, match->rule.member)) &&
-                  ((match->rule.sender == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_sender(msg, match->rule.sender)) &&
-                  ((match->rule.objInterface == NULL) ? CDBUS_TRUE :
-                      dbus_message_has_interface(msg, match->rule.objInterface)) &&
-                  ((match->rule.path == NULL) ? CDBUS_TRUE :
-                      !match->rule.treatPathAsNamespace ?
-                          dbus_message_has_path(msg, match->rule.path) :
-                          ((NULL == path) ? CDBUS_FALSE :
-                              ((0 == strncmp(match->rule.path, path,
-                                            strlen(match->rule.path)))
-                                               ||
-                               ((NULL == match->rule.localObjPath) ? CDBUS_FALSE :
-                                   (0 == strncmp(match->rule.path,
-                                           match->rule.localObjPath,
-                                           strlen(match->rule.path)))))));
+                    (dbusMsgType == dbus_message_get_type(msg)));
+
+        /* If already a match AND the rule member name is specified then ...
+         */
+        if ( isMatch && (NULL != match->rule.member) )
+        {
+            /* See if the rule member name matches the message member name */
+            isMatch = dbus_message_has_member(msg, match->rule.member);
+        }
+
+        /* If already a match AND the message sender is specified then ... */
+        if ( isMatch && (NULL != match->rule.sender) )
+        {
+            /* See if the rule's sender matches the messages sender */
+            isMatch = dbus_message_has_sender(msg, match->rule.sender);
+        }
+
+        /* If already a match AND the interface is specified then ... */
+        if ( isMatch && (NULL != match->rule.objInterface) )
+        {
+            /* See if the rule's object interface matches the message's interface */
+            isMatch = dbus_message_has_interface(msg, match->rule.objInterface);
+        }
+
+
+        /* If there is still a match and a path rule is specified then ... */
+        if ( isMatch && (NULL != match->rule.path) )
+        {
+            /* The path can be treated as either an object path OR namespace but
+             * never both. This feature was added in version 0.16 of the D-Bus
+             * specification and implemented by the bus daemon in D-Bus 1.5.0 and
+             * later.
+             */
+
+            /* If we're treating the path as an object namespace then ... */
+            if ( match->rule.treatPathAsNamespace )
+            {
+                /* If the message has no object path specified then there is
+                 * no match otherwise the rule path must be a prefix of
+                 * the message object namespace
+                 */
+                isMatch = ((NULL == path) ? CDBUS_FALSE :
+                    (0 == strncmp(match->rule.path, path, strlen(match->rule.path))));
+            }
+            /* Else treat the path as an object path rather than namespace */
+            else
+            {
+                isMatch = dbus_message_has_path(msg, match->rule.path);
+            }
+        }
 
         /* Check for a arg0namespace match */
         if ( isMatch && (NULL != match->rule.arg0Namespace) )
