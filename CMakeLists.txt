@@ -14,6 +14,7 @@ set_target_properties(cdbus_shared PROPERTIES PREFIX "")
 add_dependencies(cdbus_shared cdbus_static)
 
 add_definitions( -D_GNU_SOURCE )
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fmessage-length=0 -fPIC  -fno-strict-aliasing")
 
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/include )
 
