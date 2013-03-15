@@ -250,18 +250,57 @@ cdbus_objectAddInterface
     struct cdbus_Interface* intf
     )
 {
-    cdbus_Bool  isAdded = CDBUS_FALSE;
+    cdbus_Bool isAdded = CDBUS_FALSE;
+    cdbus_Bool nameExists = CDBUS_FALSE;
+    const cdbus_Char* intfName;
+    cdbus_Char* curIfName;
+    cdbus_Interface* curIntf;
+    cdbus_StrPtrMapIter iter;
 
     if ( (NULL != obj) && (NULL != intf) )
     {
         CDBUS_LOCK(obj->lock);
 
-        if ( cdbus_strPtrMapAdd(obj->interfaces,
-            (cdbus_Char*)cdbus_interfaceGetName(intf), intf) )
+        intfName = cdbus_interfaceGetName(intf);
+
+        if ( NULL != intfName )
         {
-            cdbus_interfaceRef(intf);
-            isAdded = CDBUS_TRUE;
+            /* Check to make sure the object doesn't already have an
+             * interface with the same name.
+             */
+            for ( cdbus_strPtrMapIterInit(obj->interfaces, &iter);
+                !cdbus_strPtrMapIterIsEnd(&iter);
+                cdbus_strPtrMapIterNext(&iter) )
+            {
+                if ( cdbus_strPtrMapIterGet(&iter, &curIfName,
+                    (void**)&curIntf) )
+                {
+                    /* Check to see if an existing interface already has the
+                     * same name.
+                     */
+                    if ( (NULL != curIfName) &&
+                        (0 == strcmp(curIfName, intfName)) )
+                    {
+                        /* Identical interface names found - can't allow
+                         * object to have two interfaces with the same name.
+                         */
+                        nameExists = CDBUS_TRUE;
+                        break;
+                    }
+                }
+            }
+
+            /* If the object doesn't already own an interface with the same
+             * name AND it can be added then ...
+             */
+            if ( !nameExists && cdbus_strPtrMapAdd(obj->interfaces,
+                (cdbus_Char*)cdbus_interfaceGetName(intf), intf) )
+            {
+                cdbus_interfaceRef(intf);
+                isAdded = CDBUS_TRUE;
+            }
         }
+
         CDBUS_UNLOCK(obj->lock);
     }
 
