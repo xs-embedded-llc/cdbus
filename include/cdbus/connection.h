@@ -83,6 +83,7 @@ CDBUS_EXPORT cdbus_HResult cdbus_connectionClose(cdbus_Connection* conn);
 CDBUS_EXPORT cdbus_Connection* cdbus_connectionRef(cdbus_Connection* conn);
 CDBUS_EXPORT void cdbus_connectionUnref(cdbus_Connection* conn);
 CDBUS_EXPORT DBusConnection* cdbus_connectionGetDBus(cdbus_Connection* conn);
+CDBUS_EXPORT cdbus_Bool cdbus_connectionGetDescriptor(cdbus_Connection* conn, cdbus_Descriptor* descr);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionRegisterObject(cdbus_Connection* conn, cdbus_Object* obj);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionUnregisterObject(cdbus_Connection* conn, const cdbus_Char* path);
 CDBUS_EXPORT cdbus_Bool cdbus_connectionSendWithReply(cdbus_Connection* conn, DBusMessage* msg,

@@ -504,6 +504,28 @@ cdbus_connectionGetDBus
 
 
 cdbus_Bool
+cdbus_connectionGetDescriptor
+    (
+    cdbus_Connection*   conn,
+    cdbus_Descriptor*   descr
+    )
+{
+    cdbus_Bool obtained = CDBUS_FALSE;
+    CDBUS_LOCK(conn->lock);
+    if ( (NULL != conn) && (NULL != descr) )
+    {
+        if ( dbus_connection_get_socket(conn->dbusConn, descr) )
+        {
+            obtained = CDBUS_TRUE;
+        }
+    }
+    CDBUS_UNLOCK(conn->lock);
+
+    return obtained;
+}
+
+
+cdbus_Bool
 cdbus_connectionRegisterObject
     (
     cdbus_Connection*   conn,
