@@ -63,13 +63,28 @@
 #   define CDBUS_EXPORT extern
 #endif
 
+#define CDBUS_XSTR(s)   CDBUS_STR(s)
+#define CDBUS_STR(s)    #s
 
+#ifndef CDBUS_MAJOR_VERSION
 #define CDBUS_MAJOR_VERSION 1
+#endif
+
+#ifndef CDBUS_MINOR_VERSION
 #define CDBUS_MINOR_VERSION 0
+#endif
+
+#ifndef CDBUS_RELEASE_VERSION
 #define CDBUS_RELEASE_VERSION 0
+#endif
 
-#define CDBUS_VERSION_STRING "1.0.0"
+#define CDBUS_VERSION_STRING \
+        CDBUS_XSTR(CDBUS_MAJOR_VERSION)"." \
+        CDBUS_XSTR(CDBUS_MINOR_VERSION)"." \
+        CDBUS_XSTR(CDBUS_RELEASE_VERSION)
 
-#define CDBUS_VERSION ((1 << 16) | (0 << 8) | (0))
+#define CDBUS_VERSION ((CDBUS_MAJOR_VERSION << 16) | \
+                        (CDBUS_MINOR_VERSION << 8) | \
+                        (CDBUS_RELEASE_VERSION))
 
 #endif /* Guard for CDBUS_MACROS_H_ */

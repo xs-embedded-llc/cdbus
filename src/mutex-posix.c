@@ -24,6 +24,9 @@
  *******************************************************************************
  */
 
+/* Makes definition of PTHREAD_MUTEX_RECURSIVE visible under Linux builds */
+#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include "mutex.h"
 #include "mutex-posix.h"

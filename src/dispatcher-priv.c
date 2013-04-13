@@ -414,6 +414,9 @@ cdbus_dispatcherUnref
             mapValue = cdbus_ptrPtrMapRemove(cdbus_gDispatcherRegistry,
                                             CDBUS_DEFAULT_DISPATCH_LOOP);
 #endif
+#ifdef NDEBUG
+            CDBUS_UNUSED(mapValue);
+#endif
             assert( mapValue == (void*)CDBUS_DISPATCHER_A);
 
             cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);

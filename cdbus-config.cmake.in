@@ -1,0 +1,17 @@
+# Config file for the CDBUS package
+# (example from http://www.vtk.org/Wiki/CMake/Tutorials/How_to_create_a_ProjectConfig.cmake_file)
+# It defines the following variables
+# CDBUS_INCLUDE_DIRS - include directories for CDBUS
+# CDBUS_LIBRARY_DIRS - library directories for CDBUS (normally not used!)
+# CDBUS_LIBRARIES - libraries to link against
+ 
+# Tell the user project where to find our headers and libraries
+set(CDBUS_INCLUDE_DIRS @CDBUS_INCLUDE_DIRS@)
+set(CDBUS_LIBRARY_DIRS @CDBUS_LIB_DIR@)
+ 
+# Our library dependencies (contains definitions for IMPORTED targets)
+# include("@FOOBAR_CMAKE_DIR@/FooBarLibraryDepends.cmake")
+ 
+set(CDBUS_LIBRARIES cdbus)
+
+#set(FOOBAR_EXECUTABLE bar)
