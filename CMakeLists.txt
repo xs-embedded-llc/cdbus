@@ -135,7 +135,7 @@ FIND_PACKAGE(Doxygen)
 IF(DOXYGEN_FOUND)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/docs/cdbus.dox.in ${CMAKE_CURRENT_BINARY_DIR}/docs/cdbus.dox @ONLY)
   ADD_CUSTOM_TARGET(docs ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/docs/cdbus.dox
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Generating documentation (Doxygen)...")
 ENDIF(DOXYGEN_FOUND)
 
@@ -149,11 +149,24 @@ ADD_CUSTOM_TARGET("dist-${PROJECT_NAME}"
     COMMAND tar -czf "${CMAKE_BINARY_DIR}/${CDBUS_PKG_NAME}"
             -C "${DIST_DIR}" --exclude-vcs --exclude="arm*" --exclude="x86*"
             --exclude=".cproject" --exclude=".project" --exclude=".settings" "${PROJECT_NAME}"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     # Cleanup so that there is no copy in the source dir
     COMMAND rm -rf "${DIST_DIR}"
 )
 
+
+# Add a custom target to install/uninstall public documentation
+ADD_CUSTOM_TARGET(install-docs
+    install -d "${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME}"
+    COMMAND cp -rf "${CMAKE_CURRENT_BINARY_DIR}/docs/api/*" "${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+ADD_CUSTOM_TARGET(uninstall-docs
+    rm -rf "${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+ADD_DEPENDENCIES(install-docs pub-docs)
+ADD_DEPENDENCIES(uninstall uninstall-docs)
 
   
 # Needs to be last statement:
@@ -161,9 +174,13 @@ INCLUDE(CPackSettings)
 
 # Finished:
 MESSAGE ("\n")
-MESSAGE (STATUS "Compile cdbus using: make")
-MESSAGE (STATUS "Install cdbus using: make install")
-MESSAGE (STATUS " (be sure to set the correct CMAKE_INSTALL_PREFIX before)")
-MESSAGE (STATUS "Compile API-documentation using: make docs\n")
+MESSAGE (STATUS "Compile ${PROJECT_NAME} using: make")
+MESSAGE (STATUS "Install ${PROJECT_NAME} using: make install")
+MESSAGE (STATUS "Uninstall ${PROJECT_NAME} using: make uninstall")
+MESSAGE (STATUS "Compile public API documentation using: make pub-docs")
+MESSAGE (STATUS "Install public API  documentation using: make install-docs")
+MESSAGE (STATUS "Uninstall public API  documentation using: make uninstall-docs")
+MESSAGE (STATUS "Create ${PROJECT_NAME} source distribution using: make dist-${PROJECT_NAME}")
+MESSAGE (STATUS " (be sure to set the correct CMAKE_INSTALL_PREFIX before)\n")
 
 

@@ -5,12 +5,15 @@ i=0
 args=()
 for arg in "$@"
 do
-    if [ "$arg" = "debug" -o "$arg" = "-DCMAKE_BUILD_TYPE=Debug" ]
+    if [ "$arg" = "debug" ]
     then
         BUILD_TYPE="Debug"
-    elif [ "$arg" = "release" -o "$arg" = "-DCMAKE_BUILD_TYPE=Release" ]
+    elif [ "$arg" = "release" ]
     then
         BUILD_TYPE="Release"
+    elif [ "${arg:0:19}" = "-DCMAKE_BUILD_TYPE=" ]
+    then
+        BUILD_TYPE="${arg:19}"
     else
         args[$i]="$arg"
         ((++i))
@@ -59,10 +62,12 @@ BUILD_DIR_PATH=$(dirname ${BUILD_DIR})
 
 cd ${BUILD_DIR}
 
+# To change the installation prefix pass in the following CMAKE definition:
+# -DCMAKE_INSTALL_PREFIX=/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/
+
 if [ ! -e Makefile ]; then
   cmake -DCMAKE_SYSTEM_PROCESSOR=${BUILD_TARGET} \
         -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR_PATH}/install" \
         -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_PATH_PREFIX}/cmake.toolchain \
         "${args[@]}" ..
   if [ $? != 0 ]; then
