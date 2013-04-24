@@ -134,7 +134,7 @@ install_pkg_config_file(cdbus
 FIND_PACKAGE(Doxygen)
 IF(DOXYGEN_FOUND)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/docs/cdbus.dox.in ${CMAKE_CURRENT_BINARY_DIR}/docs/cdbus.dox @ONLY)
-  ADD_CUSTOM_TARGET(docs ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/docs/cdbus.dox
+  ADD_CUSTOM_TARGET(pub-docs ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/docs/cdbus.dox
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Generating documentation (Doxygen)...")
 ENDIF(DOXYGEN_FOUND)
