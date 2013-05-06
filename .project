@@ -87,12 +87,48 @@
 	</natures>
 	<filteredResources>
 		<filter>
-			<id>1365881630543</id>
+			<id>1367876197206</id>
 			<name></name>
 			<type>10</type>
 			<matcher>
 				<id>org.eclipse.ui.ide.multiFilter</id>
 				<arguments>1.0-name-matches-false-false-CMakeModules</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1367876197218</id>
+			<name></name>
+			<type>26</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-x86_64-Release</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1367876197228</id>
+			<name></name>
+			<type>26</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-x86_64-Debug</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1367876197234</id>
+			<name></name>
+			<type>26</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-armv7l-Release</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1367876197240</id>
+			<name></name>
+			<type>26</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-armv7l-Debug</arguments>
 			</matcher>
 		</filter>
 	</filteredResources>
