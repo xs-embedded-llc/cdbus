@@ -841,15 +841,18 @@ void cdbus_dispatcherWakeup
 }
 
 
-cdbus_HResult
-cdbus_dispatcherRun
+static cdbus_HResult
+cdbus_dispatcherRunImpl
     (
     CDBUS_DISPATCHER_P,
-    cdbus_RunOption     runOpt
+    cdbus_RunOption     runOpt,
+    cdbus_Bool          useDispData,
+    void*               dispData
     )
 {
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
     cdbus_Int32 flag = 0;
+    void* oldDispData = NULL;
 
     if ( NULL == CDBUS_DISPATCHER_A )
     {
@@ -890,7 +893,16 @@ cdbus_dispatcherRun
             do
             {
                 CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+                if ( useDispData )
+                {
+                    oldDispData = ev_userdata(CDBUS_DISPATCHER_LOOP);
+                    ev_set_userdata(CDBUS_DISPATCHER_LOOP_ dispData);
+                }
                 ev_run(CDBUS_DISPATCHER_LOOP_ flag);
+                if ( useDispData )
+                {
+                    ev_set_userdata(CDBUS_DISPATCHER_LOOP_ oldDispData);
+                }
                 CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
             }
             while ( !CDBUS_DISPATCHER_A->exitLoop &&
@@ -904,6 +916,31 @@ cdbus_dispatcherRun
     }
 
     return rc;
+}
+
+
+cdbus_HResult
+cdbus_dispatcherRun
+    (
+    CDBUS_DISPATCHER_P,
+    cdbus_RunOption     runOpt
+    )
+{
+    return cdbus_dispatcherRunImpl(CDBUS_DISPATCHER_A_ runOpt, CDBUS_FALSE,
+                                    NULL);
+}
+
+
+cdbus_HResult
+cdbus_dispatcherRunWithData
+    (
+    CDBUS_DISPATCHER_P,
+    cdbus_RunOption     runOpt,
+    void*               dispData
+    )
+{
+    return cdbus_dispatcherRunImpl(CDBUS_DISPATCHER_A_ runOpt,
+                                CDBUS_TRUE, dispData);
 }
 
 

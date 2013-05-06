@@ -73,6 +73,9 @@ CDBUS_EXPORT void cdbus_dispatcherUnref(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
                                             cdbus_RunOption runOpt);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRunWithData(CDBUS_DISPATCHER_P,
+                                            cdbus_RunOption runOpt,
+                                            void* dispData);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
 
