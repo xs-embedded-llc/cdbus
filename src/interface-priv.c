@@ -303,8 +303,8 @@ static cdbus_Bool
 cdbus_interfaceRegisterItems
     (
     cdbus_Interface*                intf,
-    const cdbus_DbusIntrospectItem* methods,
-    cdbus_UInt32                    numMethods,
+    const cdbus_DbusIntrospectItem* items,
+    cdbus_UInt32                    numItems,
     struct cdbus_InfItemHead*       itemsHead
     )
 {
@@ -317,13 +317,19 @@ cdbus_interfaceRegisterItems
     struct cdbus_InfItemHead tmpItems;
     LIST_INIT(&tmpItems);
 
-    if ( (NULL != intf) && (NULL != methods) )
+    /* If there is nothing to register then ... */
+    if ( 0 == numItems )
+    {
+        /* We can say we registered because there is nothing to register! */
+        isRegistered = CDBUS_TRUE;
+    }
+    else if ( (NULL != intf) && (NULL != items) )
     {
         /* Let's now assume we can register everything */
         isRegistered = CDBUS_TRUE;
 
         CDBUS_LOCK(intf->lock);
-        for ( idx = 0; idx < numMethods; idx++)
+        for ( idx = 0; idx < numItems; idx++)
         {
             item = cdbus_calloc(1, sizeof(*item));
             if ( NULL == item )
@@ -332,7 +338,7 @@ cdbus_interfaceRegisterItems
                 break;
             }
 
-            item->name = cdbus_strDup(methods[idx].name);
+            item->name = cdbus_strDup(items[idx].name);
             if ( NULL == item->name )
             {
                 cdbus_interfaceDestroyItem(item);
@@ -341,9 +347,9 @@ cdbus_interfaceRegisterItems
                 break;
             }
 
-            if ( 0 < methods[idx].nArgs )
+            if ( 0 < items[idx].nArgs )
             {
-                item->args = cdbus_calloc(methods[idx].nArgs, sizeof(*item->args));
+                item->args = cdbus_calloc(items[idx].nArgs, sizeof(*item->args));
                 if ( NULL == item->args )
                 {
                     cdbus_interfaceDestroyItem(item);
@@ -354,11 +360,11 @@ cdbus_interfaceRegisterItems
             }
 
             item->nArgs = 0U;
-            for ( argIdx = 0; argIdx < methods[idx].nArgs; argIdx++ )
+            for ( argIdx = 0; argIdx < items[idx].nArgs; argIdx++ )
             {
-                item->args[argIdx].xferDir = methods[idx].args[argIdx].xferDir;
-                item->args[argIdx].name = cdbus_strDup(methods[idx].args[argIdx].name);
-                item->args[argIdx].signature = cdbus_strDup(methods[idx].args[argIdx].signature);
+                item->args[argIdx].xferDir = items[idx].args[argIdx].xferDir;
+                item->args[argIdx].name = cdbus_strDup(items[idx].args[argIdx].name);
+                item->args[argIdx].signature = cdbus_strDup(items[idx].args[argIdx].signature);
                 if ( NULL == item->args[argIdx].signature )
                 {
                     cdbus_interfaceDestroyItem(item);
@@ -504,7 +510,13 @@ cdbus_interfaceRegisterProperties
     struct cdbus_InfPropHead tmpProps;
     LIST_INIT(&tmpProps);
 
-    if ( (NULL != intf) && (NULL != properties) )
+    /* If there are no properties to register */
+    if ( 0 == numProperties )
+    {
+        /* If there is nothing to register, assume it's registered */
+        isRegistered = CDBUS_TRUE;
+    }
+    else if ( (NULL != intf) && (NULL != properties) )
     {
         /* Let's now assume we can register everything */
         isRegistered = CDBUS_TRUE;
