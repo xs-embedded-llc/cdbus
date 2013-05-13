@@ -101,7 +101,8 @@ cdbus_timerCallback
         CDBUS_UNLOCK(timeout->lock);
 
         /* Enable or disable the timer based on the repeat mode */
-        cdbus_timeoutEnable(timeout, cdbus_timeoutGetRepeat(timeout));
+        cdbus_timeoutEnable(timeout, cdbus_timeoutIsEnabled(timeout) &&
+                                    cdbus_timeoutGetRepeat(timeout));
         cdbus_timeoutUnref(timeout);
     }
 }
@@ -246,7 +247,7 @@ cdbus_timeoutEnable
     {
         CDBUS_LOCK(t->lock);
 
-        /* If we want to enable the watcher then ... */
+        /* If we want to enable the timeout then ... */
         if ( option )
         {
             /* If it's not currently active (and thus managed by
@@ -310,7 +311,6 @@ cdbus_timeoutSetInterval
     )
 {
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-    ev_tstamp period = 0.0;
 
     assert( t != NULL );
 
@@ -324,33 +324,7 @@ cdbus_timeoutSetInterval
     else
     {
         CDBUS_LOCK(t->lock);
-        period = (ev_tstamp)msecInterval / 1000.0;
-        /* If the watch is active (and being managed by the dispatcher) then ... */
-        if ( ev_is_active(&t->timerWatcher) )
-        {
-            /* You can't change the internal of an active watcher */
-            rc = cdbus_dispatcherRemoveTimeout(t->dispatcher, t);
-            if ( !CDBUS_SUCCEEDED(rc) )
-            {
-                CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to remove timeout!"));
-            }
-            else
-            {
-                /* Change the flags and now re-install the watcher to enable it again */
-                ev_timer_set(&t->timerWatcher, 0.0, period);
-                rc = cdbus_dispatcherAddTimeout(t->dispatcher, t);
-                if ( !CDBUS_SUCCEEDED(rc) )
-                {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add timeout!"));
-                }
-            }
-        }
-        /* Else the watcher is not active and being managed */
-        else
-        {
-            /* Directly update the internal since it's not running */
-            ev_timer_set(&t->timerWatcher, 0.0, period);
-        }
+        t->timerWatcher.repeat = (ev_tstamp)msecInterval / 1000.0;
         CDBUS_UNLOCK(t->lock);
     }
 
@@ -441,6 +415,20 @@ cdbus_timeoutSetRepeat
     else
     {
         CDBUS_LOCK(t->lock);
+        /* If repeat mode is being enabled then ... */
+        if ( repeat )
+        {
+            /* If repeat was previously disabled but the timeout is still
+             * enabled then ...
+             * */
+            if ( !t->repeat && ev_is_active(&t->timerWatcher) )
+            {
+                /* User wants to repeat the timeout and the timeout is enabled
+                 * so we'll re-start the timeout */
+                ev_timer_again(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+                cdbus_dispatcherWakeup(t->dispatcher);
+            }
+        }
         t->repeat = repeat;
         CDBUS_UNLOCK(t->lock);
     }
