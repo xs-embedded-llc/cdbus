@@ -34,6 +34,7 @@
 #include "dbus-timeout-ctrl.h"
 #include "trace.h"
 #include "alloc.h"
+#include "dispatcher-priv.h"
 #include "connection-priv.h"
 #include "cdbus/timeout.h"
 #include "internal.h"

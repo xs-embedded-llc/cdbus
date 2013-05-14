@@ -79,17 +79,10 @@ CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRunWithData(CDBUS_DISPATCHER_P,
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
 
-/* Only to be called by client code after the wake up function has been called on the client. */
+/* Only to be called by client code after the wake up function has been called
+ * on the client.
+ */
 CDBUS_EXPORT void cdbus_dispatcherInvokePending(CDBUS_DISPATCHER_P);
-
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,
-                       struct cdbus_Watch* watch);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRemoveWatch(CDBUS_DISPATCHER_P,
-                       struct cdbus_Watch* watch);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherAddTimeout(CDBUS_DISPATCHER_P,
-                       struct cdbus_Timeout* timeout);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRemoveTimeout(CDBUS_DISPATCHER_P,
-                       struct cdbus_Timeout* timeout);
 
 CDBUS_END_DECLS
 

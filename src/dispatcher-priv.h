@@ -73,6 +73,14 @@ struct cdbus_Connection* cdbus_dispatcherGetDbusConnOwner(CDBUS_DISPATCHER_P,
                                                 DBusConnection* dbusConn);
 void cdbus_dispatcherWakeup(CDBUS_DISPATCHER_P);
 
+cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,
+                       struct cdbus_Watch* watch);
+cdbus_HResult cdbus_dispatcherRemoveWatch(CDBUS_DISPATCHER_P,
+                       struct cdbus_Watch* watch);
+cdbus_HResult cdbus_dispatcherAddTimeout(CDBUS_DISPATCHER_P,
+                       struct cdbus_Timeout* timeout);
+cdbus_HResult cdbus_dispatcherRemoveTimeout(CDBUS_DISPATCHER_P,
+                       struct cdbus_Timeout* timeout);
 
 CDBUS_END_DECLS
 

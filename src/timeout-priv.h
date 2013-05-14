@@ -47,6 +47,7 @@ struct cdbus_Timeout
     cdbus_Atomic                refCnt;
     ev_timer                    timerWatcher;
     cdbus_Bool                  repeat;
+    cdbus_Bool                  enabled;
     cdbus_TimeoutHandler        handler;
     void*                       data;
     CDBUS_LOCK_DECLARE(lock);
