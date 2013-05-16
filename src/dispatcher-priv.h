@@ -60,6 +60,8 @@ struct cdbus_Dispatcher
     CDBUS_LOCK_DECLARE(lock);
     cdbus_WakeupFunc                            wakeupFunc;
     void*                                       wakeupData;
+    cdbus_FinalizerFunc                         finalizerFunc;
+    void*                                       finalizerData;
     cdbus_Semaphore*                            barrier;
     cdbus_Bool                                  dispatchNeeded;
     volatile cdbus_Bool                         exitLoop;

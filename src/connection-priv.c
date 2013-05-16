@@ -224,6 +224,14 @@ cdbus_connectionUnref
                     dbus_connection_close(conn->dbusConn);
                 }
 
+                /* Disconnect all the watch/timeout handler's since we're no
+                 * longer interested in tracking them.
+                 */
+                dbus_connection_set_timeout_functions(conn->dbusConn, NULL,
+                                                      NULL, NULL, NULL, NULL);
+                dbus_connection_set_watch_functions(conn->dbusConn, NULL,
+                                                    NULL, NULL, NULL, NULL);
+
                 /* We always unref our D-Bus connection whether it's a private one or
                  * a shared one since we always add a reference when it's created.
                  */

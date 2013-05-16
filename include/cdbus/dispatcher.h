@@ -63,6 +63,7 @@ typedef enum
 
 
 typedef void (*cdbus_WakeupFunc)(CDBUS_DISPATCHER_P, void*);
+typedef void (*cdbus_FinalizerFunc)(void*);
 
 
 CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(EV_P_
@@ -78,6 +79,16 @@ CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRunWithData(CDBUS_DISPATCHER_P,
                                             void* dispData);
 CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
 CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
+
+/*
+ * This sets a function to be called after the Dispatcher is destroyed
+ * (e.g. when the last reference is decremented). It is unsafe to call any
+ * Dispatcher methods from the finalizer function because by the time that
+ * call is made the Dispatcher has already been destroyed.
+ */
+CDBUS_EXPORT void cdbus_dispatcherSetFinalizer(CDBUS_DISPATCHER_P,
+                                                cdbus_FinalizerFunc finalizer,
+                                                void* data);
 
 /* Only to be called by client code after the wake up function has been called
  * on the client.

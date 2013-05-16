@@ -321,6 +321,9 @@ cdbus_dispatcherNew
                 CDBUS_DISPATCHER_A->wakeupFunc = cdbus_runPendingHandlers;
                 CDBUS_DISPATCHER_A->wakeupData = CDBUS_DISPATCHER_A;
             }
+            CDBUS_DISPATCHER_A->finalizerFunc = NULL;
+            CDBUS_DISPATCHER_A->finalizerData = NULL;
+
             LIST_INIT(&CDBUS_DISPATCHER_A->connections);
             LIST_INIT(&CDBUS_DISPATCHER_A->watches);
             LIST_INIT(&CDBUS_DISPATCHER_A->timeouts);
@@ -450,8 +453,18 @@ cdbus_dispatcherUnref
                     if ( !ev_is_default_loop(CDBUS_DISPATCHER_LOOP) )
                     {
                         ev_loop_destroy(CDBUS_DISPATCHER_LOOP);
+                        CDBUS_TRACE((CDBUS_TRC_INFO, "Destroyed libev loop"));
                     }
                 }
+            }
+
+            /* If there is a hooked defined that needs to know when the
+             * Dispatcher is truly destroyed then call it now!
+             */
+            if ( NULL != CDBUS_DISPATCHER_A->finalizerFunc )
+            {
+                CDBUS_DISPATCHER_A->finalizerFunc(
+                                            CDBUS_DISPATCHER_A->finalizerData);
             }
 
             CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
@@ -989,5 +1002,21 @@ cdbus_dispatcherInvokePending
     {
         ev_invoke_pending(CDBUS_DISPATCHER_LOOP);
         CDBUS_SEM_POST(CDBUS_DISPATCHER_A->barrier);
+    }
+}
+
+
+void
+cdbus_dispatcherSetFinalizer
+    (
+    CDBUS_DISPATCHER_P,
+    cdbus_FinalizerFunc finalizer,
+    void*               data
+    )
+{
+    if ( NULL != CDBUS_DISPATCHER_A )
+    {
+        CDBUS_DISPATCHER_A->finalizerFunc = finalizer;
+        CDBUS_DISPATCHER_A->finalizerData = data;
     }
 }
