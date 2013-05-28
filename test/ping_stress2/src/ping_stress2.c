@@ -48,6 +48,7 @@
                                                                                            \n\
   Common Args:                                                                             \n\
   --bus [busName]       -- Bus name                                                        \n\
+  -p [filename]         -- PID file.  Place to store the PID.  Useful with other tools.    \n\
   -v                    -- Verbosity                                                       \n\
                            v = level 1, Basic Count                                        \n\
                                Shows the packet count only                                 \n\
@@ -87,6 +88,9 @@
   -s [packetSize]       -- Specifies the number of data bytes to be sent.                  \n\
                            Default is 64. Minimum is 8 bytes.                              \n\
   -t                    -- Timestamp and track round trip times. Default is off.           \n\
+  --timerapi            -- Use the Timer API instead of the Pipe API                       \n\
+                           NOTE: This uses 1msec as a minimum timeout even when            \n\
+                                 \"-i 0\" because some timeout is required.                \n\
   -w                    -- Wait on Exit. This is useful when using '-c' and                \n\
                            then client goes to exit.  This will prevent the                \n\
                            process from cleaning up to allow a chance to look              \n\
@@ -189,6 +193,7 @@ static const cdbus_DbusIntrospectItem serviceMethods[] =
     { "echo_asyncAsError",  serviceMethodArgs, 3}
 };
 
+/* Pipe implementation */
 enum { INVALID_FD = -1, READ_FD = 0, WRITE_FD, MAX_FD } eFD_NAMES;
 
 enum {
@@ -205,17 +210,23 @@ enum {
   ---------------*/
 
 static struct ev_loop       *g_loop            = NULL;
-static struct ev_io         g_pipeWatch;
-static int                  g_cmdPipe[MAX_FD];
 
 static cdbus_Dispatcher     *g_dispatcher      = NULL;
 static cdbus_Connection     *g_conn            = NULL;
 static DbusService          *g_dbusSvc         = NULL;
     
+/* Timer implementation */
+cdbus_Timeout               *g_hClientTimer    = NULL;
+
+/* Pipe implementation */
 static pthread_t            g_clientThread     = 0;
+static char                 g_cmd;
 static sem_t                g_exitSem;
 static sem_t                g_clientSem;
 static sem_t                g_replySem;
+static struct ev_io         g_pipeWatch;
+static int                  g_cmdPipe[MAX_FD];
+
 
 /*static char                 g_dbusBusName[128];*/
 
@@ -236,6 +247,7 @@ static cdbus_Bool           g_ignoreReply      = CDBUS_FALSE; /* -r option      
 static int                  g_payloadSize      = 64;          /* -s option                  */
 static cdbus_Bool           g_serverMode       = CDBUS_FALSE; /* -S option                  */
 static cdbus_Bool           g_timestamp        = CDBUS_FALSE; /* -t option                  */
+static cdbus_Bool           g_timerAPI         = CDBUS_FALSE; /* -timerapi option           */
 static int                  g_verbose          = 0;           /* -v option                  */
 static cdbus_Bool           g_waitOnExit       = CDBUS_FALSE; /* -w option                  */
 
@@ -249,10 +261,14 @@ static cdbus_Bool           g_waitOnExit       = CDBUS_FALSE; /* -w option      
 /*---------------
   -- Forward Decl
   ---------------*/
-int  shutdownDbus();
-void snapshot();
-void destroyService( DbusService* );
-DbusService* newService( cdbus_Bool );
+cdbus_Bool      clientTimeoutHandler( cdbus_Timeout*, void* );
+void            destroyService(       DbusService* );
+DbusService*    newService(           cdbus_Bool );
+void            snapshot();
+int             shutdownDbus();
+
+
+
 
 
 /*!****************************************************************************
@@ -300,17 +316,110 @@ static unsigned long diffTime( struct timespec *startTime,
     if (endTime->tv_nsec > startTime->tv_nsec)
     {
         deltaSec  = (unsigned long)((endTime->tv_sec-startTime->tv_sec)*1000000);
-    	deltaUSec = (unsigned long)((endTime->tv_nsec-startTime->tv_nsec)/1000);
+        deltaUSec = (unsigned long)((endTime->tv_nsec-startTime->tv_nsec)/1000);
     }
     else
     {
         deltaSec  = (unsigned long)((endTime->tv_sec-startTime->tv_sec-1)*1000000);
-    	deltaUSec = (unsigned long)(1000000-(startTime->tv_nsec/1000)) + (unsigned long)(endTime->tv_nsec/1000);        
+        deltaUSec = (unsigned long)(1000000-(startTime->tv_nsec/1000)) + (unsigned long)(endTime->tv_nsec/1000);        
     }
 
     return( (unsigned long)(deltaSec + deltaUSec) );
 
 } /* diffTime */
+
+/*!****************************************************************************
+*
+*  \b              postClientRequest
+*
+*
+*  Shutdown the system after client request testing.
+*
+******************************************************************************/
+static void postClientRequest()
+{
+    if (g_timestamp)
+    {
+        struct timespec   endTime;
+        clock_gettime(CLOCK_MONOTONIC, &endTime);
+        g_stats.totalTime = diffTime( &g_stats.startTime, &endTime );
+    }
+
+    printf("\n");
+    snapshot();  /* display stats */
+    printf("\n");
+
+    shutdownDbus();
+
+    if (g_waitOnExit == CDBUS_TRUE)
+    {
+        printf("----------------------------------------------------\n");
+        printf("PRESS <ENTER> TO EXIT...  (pid: %d)\n", (int) getpid());
+        printf("----------------------------------------------------\n");
+        getchar();
+    }
+
+    if (g_payload)
+    {
+        free( g_payload );
+        g_payload = NULL;
+    }
+
+} /* postClientRequest */
+
+/*!****************************************************************************
+*
+*  \b              prepClientRequest
+*
+*
+*  Setup the system for client request testing.
+*
+******************************************************************************/
+static void prepClientRequest()
+{
+    g_payload = malloc(g_payloadSize);
+    assert( NULL != g_payload );
+
+    if ((g_asyncMode == CDBUS_TRUE) && (g_errorIface == CDBUS_TRUE))
+    {
+        g_reqName = "echo_asyncAsError";
+        g_cmd     =  ECHO_ASYNC_ERROR;        
+    }
+    else if (g_asyncMode == CDBUS_TRUE)
+    {
+        g_reqName = "echo_async";
+        g_cmd     =  ECHO_ASYNC;
+    }
+    else if (g_errorIface == CDBUS_TRUE)
+    {
+        g_reqName = "echo_asError";
+        g_cmd     =  ECHO_ERROR;
+    }
+    else
+    {
+        g_reqName = "echo";
+        g_cmd     =  ECHO;
+    }
+    memset(g_payload, g_cmd, g_payloadSize);
+
+    if (g_waitOnExit == CDBUS_TRUE)
+    {
+        printf("----------------------------------------------------\n");
+        printf("PRESS <ENTER> TO START...  (pid: %d)\n",  (int) getpid());
+        printf("----------------------------------------------------\n");
+        getchar();
+    }
+
+    if (g_verbose == 1)
+    {
+        printf("Pkt: 0");
+        fflush( stdout );
+    }
+
+    if (g_timestamp)
+        clock_gettime(CLOCK_MONOTONIC, &g_stats.startTime);
+
+} /* prepClientRequest */
 
 /*!****************************************************************************
 *
@@ -369,6 +478,7 @@ static void sigHandler( int sig )
 ******************************************************************************/
 void snapshot()
 {
+
     printf("\nSTATS:\n");
     printf("========================================\n");
     printf("iPkt:       %ld\n", g_stats.iPkt);
@@ -384,14 +494,79 @@ void snapshot()
     {
         if ((!g_serverMode) && (!g_ignoreReply))
         {
-            printf("minRTT:     %ld.%03ld (msec.usec) (pkt: %ld)\n", (g_stats.minRTT/1000), (g_stats.minRTT%1000), g_stats.minRTTPkt);
-            printf("avgRTT:     %ld.%03ld (msec.usec)\n",            (g_stats.avgRTT/1000), (g_stats.avgRTT%1000));
-            printf("maxRTT:     %ld:%06ld (sec:usec)  (pkt: %ld)\n", (g_stats.maxRTT/1000000), (g_stats.maxRTT%1000000), g_stats.maxRTTPkt);
-            printf("totalRTT:   %ld:%06ld (sec:usec)\n",             (g_stats.totalRTT/1000000), (g_stats.totalRTT%1000000));
+            printf("minRTT:     %f (sec) (pkt: %ld)\n",  (g_stats.minRTT/1000000.0), g_stats.minRTTPkt);
+            printf("avgRTT:     %f (sec)\n",             (g_stats.avgRTT/1000000.0));
+            printf("maxRTT:     %f (sec) (pkt: %ld)\n",  (g_stats.maxRTT/1000000.0), g_stats.maxRTTPkt);
+            printf("totalRTT:   %f (sec)\n",             (g_stats.totalRTT/1000000.0));
+            printf("pktsPerSec: %f\n", g_stats.iPkt / (g_stats.totalRTT/1000000.0));
+
         }
-        printf("Total Time: %ld:%06ld (sec:usec)\n", (g_stats.totalTime/1000000), (g_stats.totalTime%1000000));
+        printf("Total Time: %ld.%06ld (sec)\n", (g_stats.totalTime/1000000), (g_stats.totalTime%1000000));
     }
 } /* snapshot */
+
+/*!****************************************************************************
+*
+*  \b              startRequestTimer
+*
+*
+*  Start the timer API
+* 
+******************************************************************************/
+static void startRequestTimer()
+{
+    cdbus_Bool      floodMode = CDBUS_FALSE; 
+    cdbus_HResult   rc;
+    
+    if ((g_iterCount == 0) && (!g_infiniteMode))
+    {
+        postClientRequest();
+        exit(1);
+    }
+
+    if (g_hClientTimer == NULL)
+    {
+        unsigned int    timeout   = g_waitInterval/1000;
+
+        if (timeout == 0)
+        {
+            /* no interpacket delay, so set a VERY small timeout */
+            timeout = 1;
+            if (g_ignoreReply == CDBUS_TRUE)
+            {
+                floodMode = CDBUS_TRUE; 
+            }
+        }
+
+        g_hClientTimer = cdbus_timeoutNew( g_dispatcher, 
+                                           timeout, 
+                                           floodMode,
+                                           clientTimeoutHandler, NULL);
+        if ( NULL == g_hClientTimer )
+        {
+            DIE(("ERROR: Failed to create timeout watch!\n"));
+        }
+    }
+
+    if (g_waitInterval > 0)
+    {
+        if (g_verbose == 2)
+        {
+            printf(".");
+            fflush( stdout );
+        }
+    }
+
+    rc = cdbus_timeoutEnable( g_hClientTimer, CDBUS_TRUE );
+    if ( CDBUS_FAILED(rc) )
+    {
+        DIE(("ERROR: Failed to enable timeout watch!\n"));
+    }
+
+    if (g_iterCount > 0)
+        g_iterCount--;
+
+} /* startRequestTimer */
 
 /*!****************************************************************************
 *
@@ -498,7 +673,7 @@ static void handlePendingReply( DBusPendingCall  *pending,
 
     if ((g_timestamp) && (userData))
     {
-    	struct timespec   endTime;
+        struct timespec   endTime;
         unsigned long     execTime;
         struct timespec   *startTime = (struct timespec*)userData;
         clock_gettime(CLOCK_MONOTONIC, &endTime);
@@ -567,13 +742,20 @@ static void handlePendingReply( DBusPendingCall  *pending,
     if (rspMsg)
         dbus_message_unref( rspMsg );
 
-    sem_post( &g_clientSem ); /* Let the client continue */
+    if (g_timerAPI)
+    {
+        startRequestTimer(); /* trigger the next message */
+    }
+    else
+    {
+        sem_post( &g_clientSem ); /* Let the client continue */
+    }
 
 } /* handlePendingReply */
 
 /*!****************************************************************************
 *
-*  \b              clientRequests
+*  \b              clientThreadPipeHandler
 *
 *
 *  Thread handler for all client requests.
@@ -581,49 +763,8 @@ static void handlePendingReply( DBusPendingCall  *pending,
 *  \param          [in]    usr_iface_ptr    ....user data for thread
 *
 ******************************************************************************/
-static void *clientRequests( void *usr_iface_ptr )
+static void *clientThreadPipeHandler( void *usr_iface_ptr )
 {
-    char        cmd;
-
-    g_payload = malloc(g_payloadSize);
-    assert( NULL != g_payload );
-
-    if ((g_asyncMode == CDBUS_TRUE) && (g_errorIface == CDBUS_TRUE))
-    {
-        g_reqName = "echo_asyncAsError";
-        cmd       =  ECHO_ASYNC_ERROR;        
-    }
-    else if (g_asyncMode == CDBUS_TRUE)
-    {
-        g_reqName = "echo_async";
-        cmd       =  ECHO_ASYNC;
-    }
-    else if (g_errorIface == CDBUS_TRUE)
-    {
-        g_reqName = "echo_asError";
-        cmd       =  ECHO_ERROR;
-    }
-    else
-    {
-        g_reqName = "echo";
-        cmd       =  ECHO;
-    }
-    memset(g_payload, cmd, g_payloadSize);
-
-    if (g_waitOnExit == CDBUS_TRUE)
-    {
-        printf("----------------------------------------------------\n");
-        printf("PRESS <ENTER> TO START...  (pid: %d)\n",  (int) getpid());
-        printf("----------------------------------------------------\n");
-        getchar();
-    }
-
-    if (g_verbose == 1)
-    {
-        printf("Pkt: 0");
-        fflush( stdout );
-    }
-
     if (!g_infiniteMode)
     {
         /* Finite count mode, this is used to ensure we are  */
@@ -638,29 +779,9 @@ static void *clientRequests( void *usr_iface_ptr )
 
     while ((g_infiniteMode == CDBUS_TRUE) || (g_iterCount > 0))
     {
-        g_stats.iPkt++;
-
-        if (g_killClients == CDBUS_TRUE && g_stats.iPkt != 1)
-        {
-            destroyService( g_dbusSvc );
-            newService(CDBUS_FALSE);
-        }
-
-        /*----------------------------
-          -- Pre Stats
-          ----------------------------*/
-        if ((g_asyncMode == CDBUS_TRUE) && (g_errorIface == CDBUS_TRUE))
-            g_stats.txAsyncErr++;
-        else if (g_asyncMode == CDBUS_TRUE)
-            g_stats.txAsync++;
-        else if (g_errorIface == CDBUS_TRUE)
-            g_stats.txErr++;
-        else
-            g_stats.tx++;
-
         /*----------------------------------------------------*/
         /*-- Do request                                       */
-        if (write(g_cmdPipe[WRITE_FD], (void*)(&cmd), sizeof(cmd)) < 1)
+        if (write(g_cmdPipe[WRITE_FD], (void*)(&g_cmd), sizeof(g_cmd)) < 1)
         {
             printf("ERROR: Failed to signal the request to execute.\n");
         }
@@ -689,36 +810,124 @@ static void *clientRequests( void *usr_iface_ptr )
         sem_wait( &g_exitSem );
     }
 
-    if (g_timestamp)
-    {
-        struct timespec   endTime;
-        clock_gettime(CLOCK_MONOTONIC, &endTime);
-        g_stats.totalTime = diffTime( &g_stats.startTime, &endTime );
-    }
-
-    printf("\n");
-    snapshot();  /* display stats */
-    printf("\n");
-
-    shutdownDbus();
-
-    if (g_waitOnExit == CDBUS_TRUE)
-    {
-        printf("----------------------------------------------------\n");
-        printf("PRESS <ENTER> TO EXIT...  (pid: %d)\n", (int) getpid());
-        printf("----------------------------------------------------\n");
-        getchar();
-    }
-
-    if (g_payload)
-    {
-        free( g_payload );
-        g_payload = NULL;
-    }
+    postClientRequest();
 
     return( NULL );
 
-} /* clientRequests */
+} /* clientThreadPipeHandler */
+
+/*!****************************************************************************
+*
+*  \b              clientTimeoutHandler
+*
+*
+*  Handler called from the request timer.  This routine will send the request
+*  to the client.
+*
+*  \param          [in]    hTimer    ....N/A
+*  \param          [in]    user      ....N/A
+*
+******************************************************************************/
+cdbus_Bool clientTimeoutHandler( cdbus_Timeout  *hTimer,
+                                 void           *user )
+{
+    DBusPendingCall   *pending    = NULL;
+    DBusMessage       *reqMsg     = NULL;
+    cdbus_Bool        ret;
+    struct timespec   *pStartTime = NULL;
+
+    (void)hTimer;
+    (void)user;
+
+    g_stats.iPkt++;
+
+    if ((g_killClients == CDBUS_TRUE) && (g_stats.iPkt != 1))
+    {
+        destroyService( g_dbusSvc );
+        newService(CDBUS_FALSE);
+    }
+
+    /*----------------------------
+      -- Pre Stats
+      ----------------------------*/
+    if ((g_asyncMode == CDBUS_TRUE) && (g_errorIface == CDBUS_TRUE))
+        g_stats.txAsyncErr++;
+    else if (g_asyncMode == CDBUS_TRUE)
+        g_stats.txAsync++;
+    else if (g_errorIface == CDBUS_TRUE)
+        g_stats.txErr++;
+    else
+        g_stats.tx++;
+
+    /*----------------------------------------------------*/
+    /*-- Do request                                       */
+    reqMsg = dbus_message_new_method_call(  STRESS_BUSNAME,
+                                            STRESS_OBJPATH,
+                                            STRESS_INTERFACE,
+                                            "Request" );
+    assert( NULL != reqMsg );
+    dbus_message_append_args( reqMsg,
+                              DBUS_TYPE_STRING, &g_reqName,
+                              DBUS_TYPE_STRING, &g_payload,
+                              DBUS_TYPE_INVALID );
+    /* logging */
+    if (g_verbose > 0)
+    {
+        if (g_verbose == 1)
+            printf("\rPkt: %ld", g_stats.iPkt);
+        else if (g_verbose == 2)
+            printf("t");
+        else if (g_verbose == 3)
+            traceMessage(reqMsg);
+
+        fflush( stdout );
+    }
+
+    if (g_ignoreReply)
+    {
+        ret = dbus_connection_send(cdbus_connectionGetDBus(g_conn), reqMsg, NULL);
+        if (ret)
+            dbus_connection_flush(cdbus_connectionGetDBus(g_conn));
+
+        if (g_timerAPI)
+        {
+            startRequestTimer(); /* trigger the next message */
+        }
+    }
+    else
+    {
+        if (g_timestamp)
+        {
+            pStartTime = malloc( sizeof(struct timespec) );
+            clock_gettime(CLOCK_MONOTONIC, pStartTime);
+        }
+
+        ret = cdbus_connectionSendWithReply( g_conn, reqMsg, &pending, 
+                                             ASYNC_REPLY_TIMEOUT, 
+                                             handlePendingReply, (void*)pStartTime, NULL);
+    }
+    dbus_message_unref(reqMsg);
+
+    if ( !ret )
+    {
+        g_stats.rxErr++;
+        
+        if (!g_ignoreReply)
+        {
+            dbus_pending_call_unref( pending );
+            pending = NULL;                
+        }
+    }
+    else if (!g_ignoreReply)
+    {
+        dbus_pending_call_unref( pending );
+        pending = NULL;
+    }
+    /*----------------------------------------------------*/
+    
+    return( CDBUS_TRUE );
+
+} /* clientTimeoutHandler */
 
 /*!****************************************************************************
 *
@@ -733,11 +942,7 @@ static void *clientRequests( void *usr_iface_ptr )
 ******************************************************************************/
 static void cmdPipe_cb(EV_P_ struct ev_io *watch, int revents)
 {
-    char              cmd;
-    DBusPendingCall   *pending    = NULL;
-    DBusMessage       *reqMsg     = NULL;
-    cdbus_Bool        ret;
-    struct timespec   *pStartTime = NULL;
+    char    cmd;
 
     (void)watch;
 
@@ -748,64 +953,8 @@ static void cmdPipe_cb(EV_P_ struct ev_io *watch, int revents)
 
     while ( sizeof(cmd) == read(g_cmdPipe[READ_FD], (void*)(&cmd), sizeof(cmd)) )
     {
-        reqMsg = dbus_message_new_method_call(  STRESS_BUSNAME,
-                                                STRESS_OBJPATH,
-                                                STRESS_INTERFACE,
-                                                "Request" );
-        assert( NULL != reqMsg );
-        dbus_message_append_args( reqMsg,
-                                  DBUS_TYPE_STRING, &g_reqName,
-                                  DBUS_TYPE_STRING, &g_payload,
-                                  DBUS_TYPE_INVALID );
-        /* logging */
-        if (g_verbose > 0)
-        {
-            if (g_verbose == 1)
-                printf("\rPkt: %ld", g_stats.iPkt);
-            else if (g_verbose == 2)
-                printf("t");
-            else if (g_verbose == 3)
-                traceMessage(reqMsg);
+        clientTimeoutHandler( NULL,NULL );
 
-            fflush( stdout );
-        }
-
-        if (g_ignoreReply)
-        {
-            ret = dbus_connection_send(cdbus_connectionGetDBus(g_conn), reqMsg, NULL);
-            if (ret)
-                dbus_connection_flush(cdbus_connectionGetDBus(g_conn));
-        }
-        else
-        {
-            if (g_timestamp)
-            {
-                pStartTime = malloc( sizeof(struct timespec) );
-                clock_gettime(CLOCK_MONOTONIC, pStartTime);
-            }
-
-            ret = cdbus_connectionSendWithReply( g_conn, reqMsg, &pending, 
-                                                 ASYNC_REPLY_TIMEOUT, 
-                                                 handlePendingReply, (void*)pStartTime, NULL);
-        }
-        dbus_message_unref(reqMsg);
-
-        if ( !ret )
-        {
-            g_stats.rxErr++;
-            
-            if (!g_ignoreReply)
-            {
-                dbus_pending_call_unref( pending );
-                pending = NULL;                
-            }
-        }
-        else if (!g_ignoreReply)
-        {
-            dbus_pending_call_unref( pending );
-            pending = NULL;
-        }
-        
         if (g_ignoreReply)
         {
             sem_post( &g_clientSem ); /* Let the client continue */
@@ -1399,7 +1548,7 @@ void initCmdPipe()
     ev_io_start( g_loop, &g_pipeWatch );
 
     ret = pthread_create( &g_clientThread, NULL, 
-                          clientRequests,  NULL);
+                          clientThreadPipeHandler,  NULL);
     if (ret != 0)
     {
         DIE(("ERROR: Unable to create client thread\n"));
@@ -1502,9 +1651,17 @@ void initDbus()
         if (g_clientName)
             free(g_clientName);
 
-        /* Command Pipe Approach */
-        /* All DBus communication should be on the main thread */
-        initCmdPipe();
+        prepClientRequest();
+        if (g_timerAPI)
+        {
+            startRequestTimer(); 
+        }
+        else
+        {
+            /* Command Pipe Approach */
+            /* All DBus communication should be on the main thread */
+            initCmdPipe();
+        }
     }
 } /* initDbus */
 
@@ -1521,7 +1678,9 @@ void initDbus()
 ******************************************************************************/
 static void parseArgs(int argc, char **argv)
 {
-    int 		opt;
+    int         pid   = -1;
+    char        sPidFile[128];
+    int         opt;
     cdbus_Bool  bHelp = CDBUS_FALSE;
 
     while (1)
@@ -1529,11 +1688,12 @@ static void parseArgs(int argc, char **argv)
         int option_index = 0;
 
         static struct option long_options[] = {
-            { "bus",     required_argument, NULL,  'c' },
-            { 0,         0,                 0,     0 }
+            { "bus",      required_argument, NULL,  'c' }, 
+            { "timerapi", no_argument,       NULL,  'z' },
+            { 0,          0,                 0,     0 }
         };
 
-        opt = getopt_long(argc, argv, "ab:c:efghi:kn:rs:Stvw",
+        opt = getopt_long(argc, argv, "ab:c:efghi:kn:p:rs:Stvw",
                           long_options, &option_index);
         if (opt == -1) 
             break;
@@ -1589,6 +1749,25 @@ static void parseArgs(int argc, char **argv)
             strcpy(g_clientName, optarg);
             break;
 
+        case 'p':
+            {
+                char sPid[32];
+                FILE *fp = NULL;
+
+                pid = (int)getpid();
+                snprintf(sPid, 32, "%d", pid);
+                snprintf(sPidFile, 128, "%s", optarg);
+
+                fp = fopen(optarg, "w");
+                if (fp == NULL)
+                {
+                    DIE(("ERROR: Unable to create: %s\n", optarg));
+                }
+                fputs(sPid, fp);
+                fclose(fp);
+            }
+            break;
+
         case 'r':
             g_ignoreReply = CDBUS_TRUE;
             break;
@@ -1617,6 +1796,9 @@ static void parseArgs(int argc, char **argv)
             g_waitOnExit = CDBUS_TRUE;
             break;
 
+        case 'z': /* --timerapi */
+            g_timerAPI = CDBUS_TRUE;
+            break;
         }
     } /* end arg loop */
 
@@ -1633,14 +1815,22 @@ static void parseArgs(int argc, char **argv)
         printf("Running as Server:                  %s\n", (g_serverMode)?"TRUE":"false");
         printf("Verbose:                            %d\n", g_verbose); 
         printf("Timestamp Performance:              %s\n", (g_timestamp)?"TRUE":"false");
+        if (pid != -1)
+            printf("PID Filename:                       %s\n", sPidFile); 
 
         if (g_serverMode)
         {
+            printf("PID:                                %d\n", pid);
             printf("\n");
             printf("NOTE: Connect to Bus: %s\n", STRESS_BUSNAME);
         }
         else /* client */
         {
+            if (g_timerAPI)
+                printf("Client Implementation Used:         TIMER API\n");
+            else
+                printf("Client Implementation Used:         PIPE API\n");
+
             printf("Client Name:                        %sClient%s\n", STRESS_BUSNAME, (g_clientName)?g_clientName:"");
             printf("Test Async Server Reply:            %s\n", (g_asyncMode  )?"TRUE":"false");
             printf("Ingnore Reply from Request:         %s\n", (g_ignoreReply)?"TRUE":"false");
@@ -1693,6 +1883,7 @@ int shutdownDbus()
 
     /* FIXME: Need some thought/work for clean shutdown */
     cdbus_dispatcherUnref( g_dispatcher );
+    //cdbus_dispatcherStop(  g_dispatcher );
     g_dispatcher = NULL;
 
     return( CDBUS_SUCCEEDED( cdbus_shutdown() ) ? EXIT_SUCCESS : EXIT_FAILURE );
