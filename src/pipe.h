@@ -25,23 +25,30 @@
  *
  *===========================================================================
  *===========================================================================
- * @file           atomic-ops.h        
+ * @file           pipe.h
  * @author         Glenn Schmottlach
- * @brief          Declaration of supported atomic operations.
+ * @brief          Generic pipe abstraction.
  *===========================================================================
  */
 
-#ifndef CDBUS_ATOMIC_OPS_H_
-#define CDBUS_ATOMIC_OPS_H_
+#ifndef CDBUS_PIPE_H_
+#define CDBUS_PIPE_H_
 
+#include "cdbus/macros.h"
 #include "cdbus/types.h"
 
 CDBUS_BEGIN_DECLS
 
-cdbus_Int32 cdbus_atomicAdd(cdbus_Atomic* a, cdbus_Int32 v);
-cdbus_Int32 cdbus_atomicSub(cdbus_Atomic* a, cdbus_Int32 v);
-cdbus_Int32 cdbus_atomicGet(cdbus_Atomic* a);
+typedef struct cdbus_Pipe cdbus_Pipe;
+
+cdbus_Pipe* cdbus_pipeNew();
+void cdbus_pipeDestroy(cdbus_Pipe* pipe);
+void cdbus_pipeGetFds(cdbus_Pipe* pipe, cdbus_Descriptor* readFd,
+                        cdbus_Descriptor* writeFd);
+cdbus_Int32 cdbus_pipeRead(cdbus_Pipe* pipe, void* buf, cdbus_UInt32 count);
+cdbus_Int32 cdbus_pipeWrite(cdbus_Pipe* pipe, const void* buf,
+                            cdbus_UInt32 count);
 
 CDBUS_END_DECLS
 
-#endif /* Guard for CDBUS_ATOMIC_OPS_H_ */
+#endif /* Guard for CDBUS_PIPE_H_ */

@@ -36,23 +36,14 @@
 #include <memory.h>
 #include "dispatcher-priv.h"
 #include "cdbus/dispatcher.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
+#include "cdbus/mainloop.h"
 #include "dbus/dbus.h"
-#include "atomic-ops.h"
-#include "alloc.h"
 #include "trace.h"
 #include "pointer-pointer-map.h"
 #include "internal.h"
-
-
-#if EV_MULTIPLICITY
-#define CDBUS_DISPATCHER_LOOP CDBUS_DISPATCHER_A->loop
-#define CDBUS_DISPATCHER_LOOP_ CDBUS_DISPATCHER_LOOP,
-#else
-#define CDBUS_DISPATCHER_LOOP
-#define CDBUS_DISPATCHER_LOOP_
-#endif
-
-#define CDBUS_DEFAULT_DISPATCH_LOOP   ((void*)ev_default_loop(0))
+#include "pipe.h"
 
 
 static void
@@ -87,43 +78,51 @@ cdbus_onDispatchStatusChange
 
 
 static void
-cdbus_asyncCallback
+cdbus_wakeupHandler
     (
-    EV_P_
-    ev_async*       w,
-    int             rcvEvents
+    cdbus_MainLoopWatch*    watch,
+    cdbus_UInt32            flags,
+    void*                   userData
     )
 {
     cdbus_Connection* conn;
     cdbus_Connection* nextConn;
     DBusDispatchStatus status;
+    cdbus_Char         pipeBuf;
 
-    /* Used for the side-effect of waking up the event loop */
-    CDBUS_UNUSED(rcvEvents);
-    CDBUS_EV_UNUSED(EV_A);
+    cdbus_Dispatcher* dispatcher = (cdbus_Dispatcher*)userData;
+    assert( NULL != dispatcher );
 
-    cdbus_Dispatcher* CDBUS_DISPATCHER_A = (cdbus_Dispatcher*)w->data;
-    if ( CDBUS_DISPATCHER_A->dispatchNeeded )
+    CDBUS_UNUSED(watch);
+    CDBUS_UNUSED(flags);
+
+    /* Drain the wakeuup pipe of any data */
+    while ( sizeof(pipeBuf) == cdbus_pipeRead(dispatcher->wakeupPipe, &pipeBuf,
+        sizeof(pipeBuf)) );
+    dispatcher->wakeupTrigger = CDBUS_FALSE;
+
+    if ( dispatcher->dispatchNeeded )
     {
         /* Let's assume (possibly incorrectly) that all the dispatching
          * is completed here
          */
-        CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_FALSE;
+        dispatcher->dispatchNeeded = CDBUS_FALSE;
 
         /* Loop through all the connections */
-        for ( conn = LIST_FIRST(&CDBUS_DISPATCHER_A->connections);
-            conn != LIST_END(&CDBUS_DISPATCHER_A->connections);
+        for ( conn = LIST_FIRST(&dispatcher->connections);
+            conn != LIST_END(&dispatcher->connections);
             conn = nextConn )
         {
             nextConn = LIST_NEXT(conn, link);
-            status = dbus_connection_get_dispatch_status(cdbus_connectionGetDBus(conn));
+            status = dbus_connection_get_dispatch_status(
+                                            cdbus_connectionGetDBus(conn));
             if ( DBUS_DISPATCH_DATA_REMAINS == status )
             {
                 status = dbus_connection_dispatch(conn->dbusConn);
             }
 
             /* If the main loop is terminating then ... */
-            if ( CDBUS_DISPATCHER_A->exitLoop )
+            if ( dispatcher->exitLoop )
             {
                 dbus_connection_flush(conn->dbusConn);
             }
@@ -133,115 +132,17 @@ cdbus_asyncCallback
                 /* It looks like we need to do more dispatching
                  * to drain the message queue.
                  */
-                CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_TRUE;
+                dispatcher->dispatchNeeded = CDBUS_TRUE;
             }
         }
 
         /* If we processed a connection that did not complete
          * dispatching for some reason then ...
          */
-        if ( CDBUS_DISPATCHER_A->dispatchNeeded )
+        if ( dispatcher->dispatchNeeded )
         {
             /* Let's schedule another wake up call */
-            cdbus_dispatcherWakeup(CDBUS_DISPATCHER_A);
-        }
-    }
-}
-
-
-static void
-cdbus_acquireDispatcherLock
-    (
-    EV_P
-    )
-{
-    cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
-    cdbus_Dispatcher* dispatcher = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, EV_A);
-#else
-    cdbus_Dispatcher* dispatcher = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, CDBUS_DEFAULT_DISPATCH_LOOP);
-#endif
-    cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
-
-    if ( NULL == CDBUS_DISPATCHER_A )
-    {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to lookup dispatcher!"));
-    }
-    else
-    {
-        CDBUS_TRACE((CDBUS_TRC_INFO, "Acquiring dispatcher lock."));
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-    }
-}
-
-static void
-cdbus_releaseDispatcherLock
-    (
-    EV_P
-    )
-{
-    cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
-    CDBUS_DISPATCHER_P = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, EV_A);
-#else
-    CDBUS_DISPATCHER_P = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, CDBUS_DEFAULT_DISPATCH_LOOP);
-#endif
-    cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
-
-    if ( NULL == CDBUS_DISPATCHER_A )
-    {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to lookup dispatcher!"));
-    }
-    else
-    {
-        CDBUS_TRACE((CDBUS_TRC_INFO, "Releasing dispatcher lock."));
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
-    }
-}
-
-
-static void
-cdbus_runPendingHandlers
-    (
-    CDBUS_DISPATCHER_P,
-    void*               arg
-    )
-{
-    CDBUS_UNUSED(arg);
-    ev_invoke_pending(CDBUS_DISPATCHER_LOOP);
-}
-
-
-static void
-cdbus_invokePending
-    (
-    EV_P
-    )
-{
-    cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
-    CDBUS_DISPATCHER_P = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, EV_A);
-#else
-    CDBUS_DISPATCHER_P = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, CDBUS_DEFAULT_DISPATCH_LOOP);
-#endif
-    cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
-
-    if ( NULL == CDBUS_DISPATCHER_A )
-    {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to lookup dispatcher!"));
-    }
-    else
-    {
-        CDBUS_TRACE((CDBUS_TRC_INFO, "Invoking registered wake-up function."));
-        CDBUS_DISPATCHER_A->wakeupFunc(CDBUS_DISPATCHER_A, CDBUS_DISPATCHER_A->wakeupData);
-
-        while ( ev_pending_count(CDBUS_DISPATCHER_LOOP) )
-        {
-            if ( CDBUS_DISPATCHER_A->wakeupFunc != cdbus_runPendingHandlers )
-            {
-                CDBUS_SEM_WAIT(CDBUS_DISPATCHER_A->barrier);
-                CDBUS_SEM_POST(CDBUS_DISPATCHER_A->barrier);
-            }
+            cdbus_dispatcherWakeup(dispatcher);
         }
     }
 }
@@ -256,7 +157,8 @@ cdbus_dbusWakeupDispatcher
     cdbus_Connection* conn = (cdbus_Connection*)(data);
     if ( NULL == conn )
     {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Connection not provided to wake-up dispatcher!"));
+        CDBUS_TRACE((CDBUS_TRC_ERROR,
+                    "Connection not provided to wake-up dispatcher!"));
     }
     else
     {
@@ -268,125 +170,126 @@ cdbus_dbusWakeupDispatcher
 cdbus_Dispatcher*
 cdbus_dispatcherNew
     (
-    EV_P_
-    cdbus_Bool          ownsLoop,
-    cdbus_WakeupFunc    wakeupFunc,
-    void*               wakeupData
+    cdbus_MainLoop*     loop
     )
 {
-    CDBUS_DISPATCHER_P = NULL;
+    cdbus_Dispatcher* dispatcher = NULL;
     cdbus_Bool status;
+    cdbus_Descriptor pipeReadFd = -1;
 
     cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
-    /* If no loop specified then assume the default loop */
-    if ( NULL == EV_A )
-    {
-        EV_A = CDBUS_DEFAULT_DISPATCH_LOOP;
-    }
     /* See if there is another dispatcher that is already registered
      * with the same event loop.
      */
-    CDBUS_DISPATCHER_A = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, EV_A);
-#else
-    CDBUS_DISPATCHER_A = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, CDBUS_DEFAULT_DISPATCH_LOOP);
-#endif
+    dispatcher = cdbus_ptrPtrMapGet(cdbus_gDispatcherRegistry, loop);
     cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
 
-    if ( NULL != CDBUS_DISPATCHER_A )
+    if ( NULL != dispatcher )
     {
         /* A matching dispatcher already exists so we'll add a reference
          * and return that as the dispatcher.
          */
-        cdbus_dispatcherRef(CDBUS_DISPATCHER_A);
+        cdbus_dispatcherRef(dispatcher);
     }
-    /* Else this is a completely new dispatcher */
-    else
+    /* Else if this is a valid loop then ... */
+    else if ( NULL != loop )
     {
-        CDBUS_DISPATCHER_A = cdbus_calloc(1, sizeof(*CDBUS_DISPATCHER_A));
-        if ( NULL != CDBUS_DISPATCHER_A )
+        /* Create a new dispatcher for this loop */
+        dispatcher = cdbus_calloc(1, sizeof(*dispatcher));
+        if ( NULL != dispatcher )
         {
-#if EV_MULTIPLICITY
-            CDBUS_DISPATCHER_LOOP = EV_A;
-#endif
-            CDBUS_DISPATCHER_A->ownsLoop = ownsLoop;
-            CDBUS_DISPATCHER_A->exitLoop = CDBUS_FALSE;
-            if ( NULL != wakeupFunc )
-            {
-                CDBUS_DISPATCHER_A->wakeupFunc = wakeupFunc;
-                CDBUS_DISPATCHER_A->wakeupData = wakeupData;
-            }
-            else
-            {
-                CDBUS_DISPATCHER_A->wakeupFunc = cdbus_runPendingHandlers;
-                CDBUS_DISPATCHER_A->wakeupData = CDBUS_DISPATCHER_A;
-            }
-            CDBUS_DISPATCHER_A->finalizerFunc = NULL;
-            CDBUS_DISPATCHER_A->finalizerData = NULL;
+            dispatcher->loop = loop->loopRef(loop);
+            dispatcher->exitLoop = CDBUS_FALSE;
 
-            LIST_INIT(&CDBUS_DISPATCHER_A->connections);
-            LIST_INIT(&CDBUS_DISPATCHER_A->watches);
-            LIST_INIT(&CDBUS_DISPATCHER_A->timeouts);
-            CDBUS_LOCK_ALLOC(CDBUS_DISPATCHER_A->lock, CDBUS_MUTEX_RECURSIVE);
-            CDBUS_DISPATCHER_A->barrier = cdbus_semaphoreNew(0);
+            dispatcher->finalizerFunc = NULL;
+            dispatcher->finalizerData = NULL;
 
-            if ( CDBUS_LOCK_IS_NULL(CDBUS_DISPATCHER_A->lock) ||
-                (NULL == CDBUS_DISPATCHER_A->barrier) )
+            LIST_INIT(&dispatcher->connections);
+            LIST_INIT(&dispatcher->watches);
+            LIST_INIT(&dispatcher->timeouts);
+            CDBUS_LOCK_ALLOC(dispatcher->lock, CDBUS_MUTEX_RECURSIVE);
+
+            if ( CDBUS_LOCK_IS_NULL(dispatcher->lock) )
             {
-                if ( !CDBUS_LOCK_IS_NULL(CDBUS_DISPATCHER_A->lock) )
+                dispatcher->loop->loopUnref(dispatcher->loop);
+                cdbus_free(dispatcher);
+                dispatcher = NULL;
+            }
+
+
+            if ( NULL != dispatcher )
+            {
+                dispatcher->wakeupPipe = cdbus_pipeNew();
+                if ( NULL != dispatcher->wakeupPipe )
                 {
-                    CDBUS_LOCK_FREE(CDBUS_DISPATCHER_A->lock);
+                    cdbus_pipeGetFds(dispatcher->wakeupPipe, &pipeReadFd, NULL);
+                    dispatcher->wakeupWatch = loop->watchNew(loop,
+                                                        pipeReadFd,
+                                                        DBUS_WATCH_READABLE,
+                                                        cdbus_wakeupHandler,
+                                                        dispatcher);
+                    loop->watchStart(dispatcher->wakeupWatch);
+                    dispatcher->wakeupTrigger = CDBUS_FALSE;
+                    dispatcher->dispatchNeeded = CDBUS_FALSE;
                 }
 
-                if ( NULL != CDBUS_DISPATCHER_A->barrier )
+                /* If something went wrong allocating these things then ... */
+                if ( (NULL == dispatcher->wakeupPipe) ||
+                    (NULL == dispatcher->wakeupWatch) )
                 {
-                    cdbus_semaphoreFree(CDBUS_DISPATCHER_A->barrier);
-                }
+                    if ( NULL != dispatcher->wakeupWatch )
+                    {
+                        loop->watchDestroy(dispatcher->wakeupWatch);
+                    }
 
-                cdbus_free(CDBUS_DISPATCHER_A);
-                CDBUS_DISPATCHER_A = NULL;
+                    if ( NULL != dispatcher->wakeupPipe )
+                    {
+                        cdbus_pipeDestroy(dispatcher->wakeupPipe);
+                    }
+
+                    if ( !CDBUS_LOCK_IS_NULL(dispatcher->lock) )
+                    {
+                        CDBUS_LOCK_FREE(dispatcher->lock);
+                    }
+
+                    dispatcher->loop->loopUnref(dispatcher->loop);
+                    cdbus_free(dispatcher);
+                    dispatcher = NULL;
+                }
             }
-            else
+
+
+            if ( NULL != dispatcher )
             {
-                CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_FALSE;
-                ev_async_init(&CDBUS_DISPATCHER_A->asyncWatch, cdbus_asyncCallback);
-                CDBUS_DISPATCHER_A->asyncWatch.data = CDBUS_DISPATCHER_A;
-                ev_async_start(EV_A_ &CDBUS_DISPATCHER_A->asyncWatch);
-                ev_set_invoke_pending_cb(EV_A_ cdbus_invokePending);
-                ev_set_loop_release_cb(EV_A_ cdbus_releaseDispatcherLock,
-                                        cdbus_acquireDispatcherLock);
-                ev_ref(EV_A);
-                cdbus_dispatcherRef(CDBUS_DISPATCHER_A);
+                /* Add the first reference to the dispatcher */
+                cdbus_dispatcherRef(dispatcher);
+
                 CDBUS_TRACE((CDBUS_TRC_INFO,
-                    "Created dispatcher instance (%p)", (void*)CDBUS_DISPATCHER_A));
-            }
+                    "Created dispatcher instance (%p)", (void*)dispatcher));
 
-            if ( NULL != CDBUS_DISPATCHER_A )
-            {
                 /* Register the loop to the dispatcher */
                 cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
-                status = cdbus_ptrPtrMapAdd(cdbus_gDispatcherRegistry, CDBUS_DISPATCHER_LOOP, CDBUS_DISPATCHER_A);
-#else
-                status = cdbus_ptrPtrMapAdd(cdbus_gDispatcherRegistry, CDBUS_DEFAULT_DISPATCH_LOOP, CDBUS_DISPATCHER_A);
-#endif
+                status = cdbus_ptrPtrMapAdd(cdbus_gDispatcherRegistry,
+                                            loop, dispatcher);
                 cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
+
                 if ( !status )
                 {
-                    CDBUS_TRACE((CDBUS_TRC_ERROR, "Failed to add dispatcher to registry!"));
+                    CDBUS_TRACE((CDBUS_TRC_ERROR,
+                                "Failed to add dispatcher to registry!"));
                 }
             }
         }
     }
 
-    return CDBUS_DISPATCHER_A;
+    return dispatcher;
 }
 
 
 void
 cdbus_dispatcherUnref
     (
-    CDBUS_DISPATCHER_P
+    cdbus_Dispatcher*   dispatcher
     )
 {
     cdbus_Int32 value = 0;
@@ -394,88 +297,67 @@ cdbus_dispatcherUnref
     cdbus_Connection* nextConn = NULL;
     void* mapValue = NULL;
 
-    assert( NULL != CDBUS_DISPATCHER_A );
-    if ( NULL != CDBUS_DISPATCHER_A )
+    assert( NULL != dispatcher );
+    if ( NULL != dispatcher )
     {
         /* Returns the previous value */
-        value = cdbus_atomicSub(&CDBUS_DISPATCHER_A->refCnt, 1);
+        value = cdbus_atomicSub(&dispatcher->refCnt, 1);
 
         assert( 1 <= value );
 
         if ( 1 == value )
         {
-            CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+            CDBUS_LOCK(dispatcher->lock);
 
             /* Destroy all the connections */
-            for ( conn = LIST_FIRST(&CDBUS_DISPATCHER_A->connections);
-                conn != LIST_END(&CDBUS_DISPATCHER_A->connections);
+            for ( conn = LIST_FIRST(&dispatcher->connections);
+                conn != LIST_END(&dispatcher->connections);
                 conn = nextConn )
             {
                 nextConn = LIST_NEXT(conn, link);
-                cdbus_dispatcherRemoveConnection(CDBUS_DISPATCHER_A, conn);
+                cdbus_dispatcherRemoveConnection(dispatcher, conn);
             }
 
             /* Remove the loop/dispatcher mapping from the global registry */
             cdbus_ptrPtrMapLock(cdbus_gDispatcherRegistry);
-#if EV_MULTIPLICITY
             mapValue = cdbus_ptrPtrMapRemove(cdbus_gDispatcherRegistry,
-                                            CDBUS_DISPATCHER_LOOP);
-#else
-            mapValue = cdbus_ptrPtrMapRemove(cdbus_gDispatcherRegistry,
-                                            CDBUS_DEFAULT_DISPATCH_LOOP);
-#endif
+                                            dispatcher->loop);
+
 #ifdef NDEBUG
             CDBUS_UNUSED(mapValue);
 #endif
-            assert( mapValue == (void*)CDBUS_DISPATCHER_A);
+            assert( mapValue == (void*)dispatcher);
 
             cdbus_ptrPtrMapUnlock(cdbus_gDispatcherRegistry);
 
-#if EV_MULTIPLICITY
             /* Destroy the dispatcher itself */
-            if ( NULL != CDBUS_DISPATCHER_LOOP )
-#else
-            if ( CDBUS_TRUE )
-#endif
+            if ( NULL != dispatcher->loop )
             {
-                /* Stop the async watcher used to wake up the main loop in
-                 * multi-threaded scenarios.
-                 */
-                ev_async_stop(CDBUS_DISPATCHER_LOOP_ &dispatcher->asyncWatch);
-                /* Drop our reference to the loop */
-                ev_unref(CDBUS_DISPATCHER_LOOP);
+                dispatcher->loop->watchStop(dispatcher->wakeupWatch);
+                dispatcher->loop->watchDestroy(dispatcher->wakeupWatch);
+                cdbus_pipeDestroy(dispatcher->wakeupPipe);
 
-                /* If we own and control this main loop then ... */
-                if ( CDBUS_DISPATCHER_A->ownsLoop )
-                {
-                    /* Destroy the event loop */
-                    ev_break(CDBUS_DISPATCHER_LOOP_ EVBREAK_ALL);
-                    if ( !ev_is_default_loop(CDBUS_DISPATCHER_LOOP) )
-                    {
-                        ev_loop_destroy(CDBUS_DISPATCHER_LOOP);
-                        CDBUS_TRACE((CDBUS_TRC_INFO, "Destroyed libev loop"));
-                    }
-                }
+                dispatcher->loop->loopUnref(dispatcher->loop);
+                CDBUS_TRACE((CDBUS_TRC_INFO,
+                            "Unreferenced dispatcher loop"));
             }
 
             /* If there is a hooked defined that needs to know when the
              * Dispatcher is truly destroyed then call it now!
              */
-            if ( NULL != CDBUS_DISPATCHER_A->finalizerFunc )
+            if ( NULL != dispatcher->finalizerFunc )
             {
-                CDBUS_DISPATCHER_A->finalizerFunc(
-                                            CDBUS_DISPATCHER_A->finalizerData);
+                dispatcher->finalizerFunc(dispatcher->finalizerData);
             }
 
-            CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+            CDBUS_UNLOCK(dispatcher->lock);
 
             CDBUS_LOCK_FREE(CDBUS_DISPATCHER_A->lock);
-            cdbus_semaphoreFree(CDBUS_DISPATCHER_A->barrier);
 
             /* Free the dispatcher itself */
-            cdbus_free(CDBUS_DISPATCHER_A);
+            cdbus_free(dispatcher);
             CDBUS_TRACE((CDBUS_TRC_INFO,
-                 "Destroyed dispatcher instance (%p)", (void*)CDBUS_DISPATCHER_A));
+                 "Destroyed dispatcher instance (%p)", (void*)dispatcher));
         }
     }
 }
@@ -484,22 +366,22 @@ cdbus_dispatcherUnref
 cdbus_Dispatcher*
 cdbus_dispatcherRef
     (
-    CDBUS_DISPATCHER_P
+    cdbus_Dispatcher* dispatcher
     )
 {
-    if ( NULL != CDBUS_DISPATCHER_A )
+    if ( NULL != dispatcher )
     {
-        cdbus_atomicAdd(&CDBUS_DISPATCHER_A->refCnt, 1);
+        cdbus_atomicAdd(&dispatcher->refCnt, 1);
     }
 
-    return CDBUS_DISPATCHER_A;
+    return dispatcher;
 }
 
 
 cdbus_HResult
 cdbus_dispatcherAddConnection
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*           dispatcher,
     struct cdbus_Connection*    conn
     )
 {
@@ -508,12 +390,12 @@ cdbus_dispatcherAddConnection
                             CDBUS_FAC_CDBUS,
                             CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != conn) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != conn) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_LOCK(dispatcher->lock);
 
         /* Only add the connection if it doesn't already exist in the list */
-        LIST_FOREACH(curConn, &CDBUS_DISPATCHER_A->connections, link)
+        LIST_FOREACH(curConn, &dispatcher->connections, link)
         {
             if ( curConn == conn )
             {
@@ -522,7 +404,7 @@ cdbus_dispatcherAddConnection
         }
 
         /* If the connection is already in the list of connections then ... */
-        if ( curConn != LIST_END(&CDBUS_DISPATCHER_A->connections) )
+        if ( curConn != LIST_END(&dispatcher->connections) )
         {
             status = CDBUS_RESULT_SUCCESS;
         }
@@ -554,7 +436,7 @@ cdbus_dispatcherAddConnection
                 /* Add the connection to the list of connections the
                  * dispatcher owns and add a reference to it.
                  */
-                LIST_INSERT_HEAD(&CDBUS_DISPATCHER_A->connections,
+                LIST_INSERT_HEAD(&dispatcher->connections,
                                 conn, link);
                 cdbus_connectionRef(conn);
 
@@ -570,14 +452,15 @@ cdbus_dispatcherAddConnection
                                 NULL /*cdbus_releaseUserData*/);
 
                 if ( DBUS_DISPATCH_DATA_REMAINS ==
-                    dbus_connection_get_dispatch_status(cdbus_connectionGetDBus(conn)) )
+                    dbus_connection_get_dispatch_status(
+                    cdbus_connectionGetDBus(conn)) )
                 {
-                    CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_TRUE;
+                    dispatcher->dispatchNeeded = CDBUS_TRUE;
                 }
-                cdbus_dispatcherWakeup(CDBUS_DISPATCHER_A);
+                cdbus_dispatcherWakeup(dispatcher);
             }
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
     }
 
     return status;
@@ -587,7 +470,7 @@ cdbus_dispatcherAddConnection
 cdbus_HResult
 cdbus_dispatcherRemoveConnection
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*           dispatcher,
     struct cdbus_Connection*    conn
     )
 {
@@ -597,10 +480,10 @@ cdbus_dispatcherRemoveConnection
                                         CDBUS_FAC_CDBUS,
                                         CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != conn) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != conn) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-        LIST_FOREACH(curConn, &CDBUS_DISPATCHER_A->connections, link)
+        CDBUS_LOCK(dispatcher->lock);
+        LIST_FOREACH(curConn, &dispatcher->connections, link)
         {
             if ( curConn == conn )
             {
@@ -627,7 +510,7 @@ cdbus_dispatcherRemoveConnection
         }
 
         /* If a matching connection was not found then ... */
-        if ( LIST_END(&CDBUS_DISPATCHER_A->connections) == curConn )
+        if ( LIST_END(&dispatcher->connections) == curConn )
         {
             status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                         CDBUS_FAC_CDBUS,
@@ -638,9 +521,9 @@ cdbus_dispatcherRemoveConnection
             /* If we're running multi-threaded then wake up the event loop
              * so it notices that the connection has been removed.
              */
-            cdbus_dispatcherWakeup(CDBUS_DISPATCHER_A);
+            cdbus_dispatcherWakeup(dispatcher);
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
     }
 
     return status;
@@ -650,7 +533,7 @@ cdbus_dispatcherRemoveConnection
 struct cdbus_Connection*
 cdbus_dispatcherGetDbusConnOwner
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*   dispatcher,
     DBusConnection*     dbusConn
     )
 {
@@ -658,8 +541,8 @@ cdbus_dispatcherGetDbusConnOwner
 
     if ( NULL != dbusConn )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-        LIST_FOREACH(curConn, &CDBUS_DISPATCHER_A->connections, link)
+        CDBUS_LOCK(dispatcher->lock);
+        LIST_FOREACH(curConn, &dispatcher->connections, link)
         {
             if ( curConn->dbusConn == dbusConn )
             {
@@ -670,7 +553,7 @@ cdbus_dispatcherGetDbusConnOwner
         /* If a match is not found then curConn is NULL at
          * the end of this loop
          */
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
     }
 
     return curConn;
@@ -680,7 +563,7 @@ cdbus_dispatcherGetDbusConnOwner
 cdbus_HResult
 cdbus_dispatcherAddWatch
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*   dispatcher,
     struct cdbus_Watch* watch
     )
 {
@@ -689,11 +572,11 @@ cdbus_dispatcherAddWatch
                             CDBUS_FAC_CDBUS,
                             CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != watch) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != watch) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_LOCK(dispatcher->lock);
         /* Only add the watch if it doesn't already exist in the list */
-        LIST_FOREACH(curWatch, &CDBUS_DISPATCHER_A->watches, link)
+        LIST_FOREACH(curWatch, &dispatcher->watches, link)
         {
             if ( curWatch == watch )
             {
@@ -701,15 +584,17 @@ cdbus_dispatcherAddWatch
             }
         }
 
-        /* If the connection isn't already in the list of connections then ... */
-        if ( curWatch == LIST_END(&CDBUS_DISPATCHER_A->watches) )
+        /* If the connection isn't already in the list of connections
+         * then ...
+         */
+        if ( curWatch == LIST_END(&dispatcher->watches) )
         {
-            LIST_INSERT_HEAD(&CDBUS_DISPATCHER_A->watches, watch, link);
+            LIST_INSERT_HEAD(&dispatcher->watches, watch, link);
 
             /* This dispatcher now references it too */
             cdbus_watchRef(watch);
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
 
         status = CDBUS_RESULT_SUCCESS;
     }
@@ -721,7 +606,7 @@ cdbus_dispatcherAddWatch
 cdbus_HResult
 cdbus_dispatcherRemoveWatch
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*   dispatcher,
     struct cdbus_Watch* watch
     )
 {
@@ -731,10 +616,10 @@ cdbus_dispatcherRemoveWatch
                                         CDBUS_FAC_CDBUS,
                                         CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != watch) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != watch) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-        LIST_FOREACH(curWatch, &CDBUS_DISPATCHER_A->watches, link)
+        CDBUS_LOCK(dispatcher->lock);
+        LIST_FOREACH(curWatch, &dispatcher->watches, link)
         {
             if ( curWatch == watch )
             {
@@ -746,13 +631,13 @@ cdbus_dispatcherRemoveWatch
         }
 
         /* If a matching watch was not found then ... */
-        if ( LIST_END(&CDBUS_DISPATCHER_A->watches) == curWatch )
+        if ( LIST_END(&dispatcher->watches) == curWatch )
         {
             status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                         CDBUS_FAC_CDBUS,
                                         CDBUS_EC_NOT_FOUND);
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
     }
 
     return status;
@@ -762,7 +647,7 @@ cdbus_dispatcherRemoveWatch
 cdbus_HResult
 cdbus_dispatcherAddTimeout
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*       dispatcher,
     struct cdbus_Timeout*   timeout
     )
 {
@@ -771,11 +656,11 @@ cdbus_dispatcherAddTimeout
                             CDBUS_FAC_CDBUS,
                             CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != timeout) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != timeout) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_LOCK(dispatcher->lock);
         /* Only add the watch if it doesn't already exist in the list */
-        LIST_FOREACH(curTimeout, &CDBUS_DISPATCHER_A->timeouts, link)
+        LIST_FOREACH(curTimeout, &dispatcher->timeouts, link)
         {
             if ( curTimeout == timeout )
             {
@@ -783,14 +668,16 @@ cdbus_dispatcherAddTimeout
             }
         }
 
-        /* If the connection isn't already in the list of connections then ... */
-        if ( curTimeout == LIST_END(&CDBUS_DISPATCHER_A->timeouts) )
+        /* If the connection isn't already in the list of connections
+         * then ...
+         */
+        if ( curTimeout == LIST_END(&dispatcher->timeouts) )
         {
-            LIST_INSERT_HEAD(&CDBUS_DISPATCHER_A->timeouts, timeout, link);
+            LIST_INSERT_HEAD(&dispatcher->timeouts, timeout, link);
             /* The dispatcher now holds a reference to the timeout */
             cdbus_timeoutRef(timeout);
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
 
         status = CDBUS_RESULT_SUCCESS;
     }
@@ -802,7 +689,7 @@ cdbus_dispatcherAddTimeout
 cdbus_HResult
 cdbus_dispatcherRemoveTimeout
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*       dispatcher,
     struct cdbus_Timeout*   timeout
     )
 {
@@ -812,10 +699,10 @@ cdbus_dispatcherRemoveTimeout
                                         CDBUS_FAC_CDBUS,
                                         CDBUS_EC_INVALID_PARAMETER);
 
-    if ( (NULL != timeout) && (NULL != CDBUS_DISPATCHER_A) )
+    if ( (NULL != timeout) && (NULL != dispatcher) )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-        LIST_FOREACH(curTimeout, &CDBUS_DISPATCHER_A->timeouts, link)
+        CDBUS_LOCK(dispatcher->lock);
+        LIST_FOREACH(curTimeout, &dispatcher->timeouts, link)
         {
             if ( curTimeout == timeout )
             {
@@ -827,47 +714,71 @@ cdbus_dispatcherRemoveTimeout
         }
 
         /* If a matching timeout was not found then ... */
-        if ( LIST_END(&CDBUS_DISPATCHER_A->timeouts) == curTimeout )
+        if ( LIST_END(&dispatcher->timeouts) == curTimeout )
         {
             status = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                         CDBUS_FAC_CDBUS,
                                         CDBUS_EC_NOT_FOUND);
         }
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        CDBUS_UNLOCK(dispatcher->lock);
     }
 
     return status;
 }
 
 
-void cdbus_dispatcherWakeup
+void cdbus_dispatcherTriggerWakeup
     (
-    CDBUS_DISPATCHER_P
+    cdbus_Dispatcher* dispatcher
     )
 {
-    if ( NULL != CDBUS_DISPATCHER_A )
+    const cdbus_Char buf = 'W';
+
+    if ( NULL != dispatcher )
     {
-        CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-        ev_async_send(CDBUS_DISPATCHER_LOOP_ &CDBUS_DISPATCHER_A->asyncWatch);
-        CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+        /* If the wakeup function hasn't been triggered yet then */
+        if ( !dispatcher->wakeupTrigger )
+        {
+            if ( sizeof(buf) == cdbus_pipeWrite(dispatcher->wakeupPipe, &buf,
+                sizeof(buf)) )
+            {
+                dispatcher->wakeupTrigger = CDBUS_TRUE;
+            }
+            else
+            {
+                CDBUS_TRACE((CDBUS_TRC_WARN,
+                           "Failed to write wakeup trigger to pipe"));
+            }
+        }
     }
 }
 
 
-static cdbus_HResult
-cdbus_dispatcherRunImpl
+void cdbus_dispatcherWakeup
     (
-    CDBUS_DISPATCHER_P,
-    cdbus_RunOption     runOpt,
-    cdbus_Bool          useDispData,
-    void*               dispData
+    cdbus_Dispatcher* dispatcher
+    )
+{
+    if ( NULL != dispatcher )
+    {
+        CDBUS_LOCK(dispatcher->lock);
+        cdbus_dispatcherTriggerWakeup(dispatcher);
+        CDBUS_UNLOCK(dispatcher->lock);
+    }
+}
+
+
+cdbus_HResult
+cdbus_dispatcherRun
+    (
+    cdbus_Dispatcher*   dispatcher,
+    cdbus_RunOption     runOpt
     )
 {
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
-    cdbus_Int32 flag = 0;
-    void* oldDispData = NULL;
+    cdbus_Bool canBlock = CDBUS_TRUE;
 
-    if ( NULL == CDBUS_DISPATCHER_A )
+    if ( NULL == dispatcher )
     {
         rc = CDBUS_MAKE_HRESULT(CDBUS_SEV_FAILURE,
                                 CDBUS_FAC_CDBUS,
@@ -881,15 +792,15 @@ cdbus_dispatcherRunImpl
                 /* The do/while loop will effectively
                  * implement this run option below.
                  */
-                flag = EVRUN_ONCE;
+                canBlock = CDBUS_TRUE;
                 break;
 
             case CDBUS_RUN_NO_WAIT:
-                flag = EVRUN_NOWAIT;
+                canBlock = CDBUS_FALSE;
                 break;
 
             case CDBUS_RUN_ONCE:
-                flag = EVRUN_ONCE;
+                canBlock = CDBUS_TRUE;
                 break;
 
             default:
@@ -902,29 +813,20 @@ cdbus_dispatcherRunImpl
 
         if ( CDBUS_SUCCEEDED(rc) )
         {
-            CDBUS_DISPATCHER_A->exitLoop = CDBUS_FALSE;
+            dispatcher->exitLoop = CDBUS_FALSE;
             do
             {
-                CDBUS_LOCK(CDBUS_DISPATCHER_A->lock);
-                if ( useDispData )
-                {
-                    oldDispData = ev_userdata(CDBUS_DISPATCHER_LOOP);
-                    ev_set_userdata(CDBUS_DISPATCHER_LOOP_ dispData);
-                }
-                ev_run(CDBUS_DISPATCHER_LOOP_ flag);
-                if ( useDispData )
-                {
-                    ev_set_userdata(CDBUS_DISPATCHER_LOOP_ oldDispData);
-                }
-                CDBUS_UNLOCK(CDBUS_DISPATCHER_A->lock);
+                CDBUS_LOCK(dispatcher->lock);
+                dispatcher->loop->loopIterate(dispatcher->loop, canBlock);
+                CDBUS_UNLOCK(dispatcher->lock);
             }
-            while ( !CDBUS_DISPATCHER_A->exitLoop &&
+            while ( !dispatcher->exitLoop &&
                 (CDBUS_RUN_WAIT == runOpt) );
 
             /* Keeps the state consistent now that the loop
              * has exited.
              */
-            CDBUS_DISPATCHER_A->exitLoop = CDBUS_TRUE;
+            dispatcher->exitLoop = CDBUS_TRUE;
         }
     }
 
@@ -933,34 +835,9 @@ cdbus_dispatcherRunImpl
 
 
 cdbus_HResult
-cdbus_dispatcherRun
-    (
-    CDBUS_DISPATCHER_P,
-    cdbus_RunOption     runOpt
-    )
-{
-    return cdbus_dispatcherRunImpl(CDBUS_DISPATCHER_A_ runOpt, CDBUS_FALSE,
-                                    NULL);
-}
-
-
-cdbus_HResult
-cdbus_dispatcherRunWithData
-    (
-    CDBUS_DISPATCHER_P,
-    cdbus_RunOption     runOpt,
-    void*               dispData
-    )
-{
-    return cdbus_dispatcherRunImpl(CDBUS_DISPATCHER_A_ runOpt,
-                                CDBUS_TRUE, dispData);
-}
-
-
-cdbus_HResult
 cdbus_dispatcherStop
     (
-    CDBUS_DISPATCHER_P
+    cdbus_Dispatcher*   dispatcher
     )
 {
     /* This function purposely does not try to lock
@@ -970,12 +847,12 @@ cdbus_dispatcherStop
      * thread might be trying to destroy the dispatcher or
      * start it running again.
      */
-    CDBUS_DISPATCHER_A->exitLoop = CDBUS_TRUE;
+    dispatcher->exitLoop = CDBUS_TRUE;
     /* Force the handler to scan through it's connections
      * and flush everything.
      */
-    CDBUS_DISPATCHER_A->dispatchNeeded = CDBUS_TRUE;
-    ev_async_send(CDBUS_DISPATCHER_LOOP_ &CDBUS_DISPATCHER_A->asyncWatch);
+    dispatcher->dispatchNeeded = CDBUS_TRUE;
+    cdbus_dispatcherTriggerWakeup(dispatcher);
 
     return CDBUS_RESULT_SUCCESS;
 }
@@ -984,39 +861,25 @@ cdbus_dispatcherStop
 void
 cdbus_dispatcherBreak
     (
-    CDBUS_DISPATCHER_P
+    cdbus_Dispatcher*   dispatcher
     )
 {
-    cdbus_dispatcherStop(CDBUS_DISPATCHER_A);
-    ev_break(CDBUS_DISPATCHER_LOOP_ EVBREAK_ALL);
-}
-
-
-void
-cdbus_dispatcherInvokePending
-    (
-    CDBUS_DISPATCHER_P
-    )
-{
-    if ( NULL != CDBUS_DISPATCHER_A )
-    {
-        ev_invoke_pending(CDBUS_DISPATCHER_LOOP);
-        CDBUS_SEM_POST(CDBUS_DISPATCHER_A->barrier);
-    }
+    cdbus_dispatcherStop(dispatcher);
+    dispatcher->loop->loopQuit(dispatcher->loop);
 }
 
 
 void
 cdbus_dispatcherSetFinalizer
     (
-    CDBUS_DISPATCHER_P,
+    cdbus_Dispatcher*   dispatcher,
     cdbus_FinalizerFunc finalizer,
     void*               data
     )
 {
-    if ( NULL != CDBUS_DISPATCHER_A )
+    if ( NULL != dispatcher )
     {
-        CDBUS_DISPATCHER_A->finalizerFunc = finalizer;
-        CDBUS_DISPATCHER_A->finalizerData = data;
+        dispatcher->finalizerFunc = finalizer;
+        dispatcher->finalizerData = data;
     }
 }

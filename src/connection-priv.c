@@ -33,14 +33,14 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdlib.h>
-#include <cdbus/timeout.h>
-#include <cdbus/watch.h>
+#include "cdbus/timeout.h"
+#include "cdbus/watch.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
 #include "connection-priv.h"
 #include "dispatcher-priv.h"
 #include "object-priv.h"
-#include "alloc.h"
 #include "trace.h"
-#include "atomic-ops.h"
 #include "dbus-watch-ctrl.h"
 #include "dbus-timeout-ctrl.h"
 #include "internal.h"
@@ -56,6 +56,54 @@ typedef struct cdbus_ObjectConnBinding
     cdbus_Connection*   conn;
 } cdbus_ObjectConnBinding;
 
+
+static dbus_bool_t
+cdbus_timeoutDummyAddHandler
+    (
+    DBusTimeout*    dbusTimeout,
+    void*           data
+    )
+{
+    CDBUS_UNUSED(dbusTimeout);
+    CDBUS_UNUSED(data);
+    return TRUE;
+}
+
+static void
+cdbus_timeoutDummyToggleRemoveHandler
+    (
+    DBusTimeout*    dbusTimeout,
+    void*           data
+    )
+{
+    CDBUS_UNUSED(dbusTimeout);
+    CDBUS_UNUSED(data);
+}
+
+
+static dbus_bool_t
+cdbus_watchDummyAddHandler
+    (
+    DBusWatch*  dbusWatch,
+    void*       data
+    )
+{
+    CDBUS_UNUSED(dbusWatch);
+    CDBUS_UNUSED(data);
+
+    return TRUE;
+}
+
+static void
+cdbus_watchDummyToggleRemoveHandler
+    (
+    DBusWatch*  dbusWatch,
+    void*       data
+    )
+{
+    CDBUS_UNUSED(dbusWatch);
+    CDBUS_UNUSED(data);
+}
 
 static DBusHandlerResult
 cdbus_connectionObjectPathMsgHandler
@@ -225,12 +273,19 @@ cdbus_connectionUnref
                 }
 
                 /* Disconnect all the watch/timeout handler's since we're no
-                 * longer interested in tracking them.
+                 * longer interested in tracking them. Replace this existing
+                 * handlers with dummy (do nothing) handlers.
                  */
-                dbus_connection_set_timeout_functions(conn->dbusConn, NULL,
-                                                      NULL, NULL, NULL, NULL);
-                dbus_connection_set_watch_functions(conn->dbusConn, NULL,
-                                                    NULL, NULL, NULL, NULL);
+                dbus_connection_set_timeout_functions(conn->dbusConn,
+                                    cdbus_timeoutDummyAddHandler,
+                                    cdbus_timeoutDummyToggleRemoveHandler,
+                                    cdbus_timeoutDummyToggleRemoveHandler,
+                                    NULL, NULL);
+                dbus_connection_set_watch_functions(conn->dbusConn,
+                                    cdbus_watchDummyAddHandler,
+                                    cdbus_watchDummyToggleRemoveHandler,
+                                    cdbus_watchDummyToggleRemoveHandler,
+                                    NULL, NULL);
 
                 /* We always unref our D-Bus connection whether it's a private one or
                  * a shared one since we always add a reference when it's created.

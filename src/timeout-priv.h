@@ -38,14 +38,15 @@
 #include "cdbus/timeout.h"
 #include "queue.h"
 #include "mutex.h"
-#include "ev.h"
 
+/* Forward references */
+struct cdbus_MainLoopTimer;
 
 struct cdbus_Timeout
 {
     cdbus_Dispatcher*           dispatcher;
     cdbus_Atomic                refCnt;
-    ev_timer                    timerWatcher;
+    struct cdbus_MainLoopTimer* timer;
     cdbus_Bool                  repeat;
     cdbus_Bool                  enabled;
     cdbus_TimeoutHandler        handler;

@@ -37,8 +37,8 @@
 #include "cdbus/interface.h"
 #include "cdbus/object.h"
 #include "cdbus/connection.h"
+#include "cdbus/atomic-ops.h"
 #include "queue.h"
-#include "atomic-ops.h"
 #include "mutex.h"
 
 CDBUS_BEGIN_DECLS

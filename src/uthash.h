@@ -32,7 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Modifications for CDBUS
  */
 #include <stdio.h>
-#include "alloc.h"
+#include "cdbus/alloc.h"
 #define uthash_malloc(sz)   cdbus_malloc(sz)
 #define uthash_free(ptr,sz) cdbus_free(ptr)
 #define uthash_fatal(msg)   do { fputs(msg, stderr); abort(); } while (0);

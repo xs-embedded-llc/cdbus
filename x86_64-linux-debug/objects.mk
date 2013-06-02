@@ -4,5 +4,5 @@
 
 USER_OBJS :=
 
-LIBS := -ldbus-1 -lev
+LIBS := -ldbus-1 -lglib-2.0 -lev
 

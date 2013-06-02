@@ -33,11 +33,11 @@
 #include <string.h>
 #include <assert.h>
 #include "cdbus/object.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
 #include "object-registry.h"
-#include "atomic-ops.h"
 #include "mutex.h"
 #include "uthash.h"
-#include "alloc.h"
 
 #define CDBUS_OBJECT_REGISTRY_GROWTH_INC    (5)
 

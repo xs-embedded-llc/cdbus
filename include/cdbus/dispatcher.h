@@ -36,7 +36,6 @@
 
 #include "cdbus/macros.h"
 #include "cdbus/types.h"
-#include "ev.h"
 
 CDBUS_BEGIN_DECLS
 
@@ -45,11 +44,7 @@ typedef struct cdbus_Dispatcher cdbus_Dispatcher;
 struct cdbus_Connection;
 struct cdbus_Watch;
 struct cdbus_Timeout;
-
-#define CDBUS_DISPATCHER_A  dispatcher
-#define CDBUS_DISPATCHER_A_ CDBUS_DISPATCHER_A,
-#define CDBUS_DISPATCHER_P  cdbus_Dispatcher* CDBUS_DISPATCHER_A
-#define CDBUS_DISPATCHER_P_  CDBUS_DISPATCHER_P,
+struct cdbus_MainLoop;
 
 typedef enum
 {
@@ -62,23 +57,16 @@ typedef enum
 } cdbus_RunOption;
 
 
-typedef void (*cdbus_WakeupFunc)(CDBUS_DISPATCHER_P, void*);
 typedef void (*cdbus_FinalizerFunc)(void*);
 
 
-CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(EV_P_
-                                        cdbus_Bool ownsLoop,
-                                        cdbus_WakeupFunc wakeupFunc,
-                                        void* wakeupData);
-CDBUS_EXPORT void cdbus_dispatcherUnref(CDBUS_DISPATCHER_P);
-CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(CDBUS_DISPATCHER_P);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(CDBUS_DISPATCHER_P,
+CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherNew(struct cdbus_MainLoop* loop);
+CDBUS_EXPORT void cdbus_dispatcherUnref(cdbus_Dispatcher* dispatcher);
+CDBUS_EXPORT cdbus_Dispatcher* cdbus_dispatcherRef(cdbus_Dispatcher* dispatcher);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRun(cdbus_Dispatcher* dispatcher,
                                             cdbus_RunOption runOpt);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherRunWithData(CDBUS_DISPATCHER_P,
-                                            cdbus_RunOption runOpt,
-                                            void* dispData);
-CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(CDBUS_DISPATCHER_P);
-CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
+CDBUS_EXPORT cdbus_HResult cdbus_dispatcherStop(cdbus_Dispatcher* dispatcher);
+CDBUS_EXPORT void cdbus_dispatcherBreak(cdbus_Dispatcher* dispatcher);
 
 /*
  * This sets a function to be called after the Dispatcher is destroyed
@@ -86,14 +74,9 @@ CDBUS_EXPORT void cdbus_dispatcherBreak(CDBUS_DISPATCHER_P);
  * Dispatcher methods from the finalizer function because by the time that
  * call is made the Dispatcher has already been destroyed.
  */
-CDBUS_EXPORT void cdbus_dispatcherSetFinalizer(CDBUS_DISPATCHER_P,
+CDBUS_EXPORT void cdbus_dispatcherSetFinalizer(cdbus_Dispatcher* dispatcher,
                                                 cdbus_FinalizerFunc finalizer,
                                                 void* data);
-
-/* Only to be called by client code after the wake up function has been called
- * on the client.
- */
-CDBUS_EXPORT void cdbus_dispatcherInvokePending(CDBUS_DISPATCHER_P);
 
 CDBUS_END_DECLS
 

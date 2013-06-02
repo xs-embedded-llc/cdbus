@@ -34,9 +34,9 @@
 #include <assert.h>
 #include "dbus/dbus.h"
 #include "cdbus/error.h"
+#include "cdbus/alloc.h"
 #include "object-priv.h"
 #include "mutex.h"
-#include "alloc.h"
 #include "trace.h"
 #include "internal.h"
 

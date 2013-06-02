@@ -5,6 +5,7 @@ PROJECT( cdbus  C )
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMakeModules")
 set(FIND_LIBRARY_USE_LIB64_PATHS TRUE)
 
+
 # Define the CDBUS root directory
 set(CDBUS_ROOT_DIR ${PROJECT_SOURCE_DIR})
 SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CDBUS_ROOT_DIR}/${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_BUILD_TYPE}/lib )
@@ -24,18 +25,52 @@ endif(COMMAND cmake_policy)
 set(CDBUS_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 file(GLOB CDBUS_SRC_FILES "${CDBUS_SRC_DIR}/*.c")
 
+set(CDBUS_MAIN_LOOP_EV_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-ev.c")
+set(CDBUS_MAIN_LOOP_GLIB_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-glib.c")
+
+# The "core" CDBUS library
 add_library(CDBUS_STATIC STATIC ${CDBUS_SRC_FILES})
 set_target_properties(CDBUS_STATIC PROPERTIES OUTPUT_NAME cdbus)
-
 add_library(CDBUS_SHARED SHARED ${CDBUS_SRC_FILES})
 set_target_properties(CDBUS_SHARED PROPERTIES OUTPUT_NAME cdbus)
 
 set_target_properties(CDBUS_SHARED PROPERTIES 
                       SOVERSION "${CDBUS_MAJOR_VERSION}"
                       VERSION "${CDBUS_VERSION_STRING}")
-
 # This forces the builds to serialize
 add_dependencies(CDBUS_SHARED CDBUS_STATIC)
+
+                      
+# The libev main loop library
+if( NOT CDBUS_NO_GLIB_LOOP )
+    add_library(CDBUS_MAIN_LOOP_EV_STATIC STATIC ${CDBUS_MAIN_LOOP_EV_SRC_FILES})
+    set_target_properties(CDBUS_MAIN_LOOP_EV_STATIC PROPERTIES OUTPUT_NAME cdbus-ev)
+    add_library(CDBUS_MAIN_LOOP_EV_SHARED SHARED ${CDBUS_MAIN_LOOP_EV_SRC_FILES})
+    set_target_properties(CDBUS_MAIN_LOOP_EV_SHARED PROPERTIES OUTPUT_NAME cdbus-ev)
+    
+    set_target_properties(CDBUS_MAIN_LOOP_EV_SHARED PROPERTIES 
+                          SOVERSION "${CDBUS_MAJOR_VERSION}"
+                          VERSION "${CDBUS_VERSION_STRING}")
+    # This forces the builds to serialize
+    add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_MAIN_LOOP_EV_STATIC)
+endif( NOT CDBUS_NO_GLIB_LOOP )
+
+                      
+# The glib main loop library
+if( NOT CDBUS_NO_LIBEV_LOOP )
+    add_library(CDBUS_MAIN_LOOP_GLIB_STATIC STATIC ${CDBUS_MAIN_LOOP_GLIB_SRC_FILES})
+    set_target_properties(CDBUS_MAIN_LOOP_GLIB_STATIC PROPERTIES OUTPUT_NAME cdbus-glib)
+    add_library(CDBUS_MAIN_LOOP_GLIB_SHARED SHARED ${CDBUS_MAIN_LOOP_GLIB_SRC_FILES})
+    set_target_properties(CDBUS_MAIN_LOOP_GLIB_SHARED PROPERTIES OUTPUT_NAME cdbus-glib)
+    
+    set_target_properties(CDBUS_MAIN_LOOP_GLIB_SHARED PROPERTIES 
+                          SOVERSION "${CDBUS_MAJOR_VERSION}"
+                          VERSION "${CDBUS_VERSION_STRING}")
+    # This forces the builds to serialize
+    add_dependencies(CDBUS_MAIN_LOOP_GLIB_SHARED CDBUS_MAIN_LOOP_GLIB_STATIC)
+endif( NOT CDBUS_NO_LIBEV_LOOP )
+
+
 
 # Configure the compiler settings
 include(CompilerSettings)
@@ -50,31 +85,43 @@ pkg_check_modules(DBUSLIB_PKG REQUIRED "dbus-1>=1.4.0")
 include_directories(${DBUSLIB_PKG_INCLUDE_DIRS})
 link_directories(${DBUSLIB_PKG_LIBRARY_DIRS})
 
-
-pkg_check_modules(LIBEV_PKG "ev")
-if( LIBEV_PKG_FOUND )
-    include_directories(${LIBEV_PKG_INCLUDE_DIRS})
-    link_directories(${LIBEV_PKG_LIBRARY_DIRS})
-else( LIBEV_PKG_FOUND )
-    # Search for the library in the usual places
-    find_library( LIBEV_LIB ev )
-    if( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
-        message(FATAL_ERROR "Cannot find libev in the library search path")
-    else( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
-        find_path(LIBEV_PKG_INCLUDE_DIRS ev.h)
+if( NOT CDBUS_NO_LIBEV_LOOP )
+    pkg_check_modules(LIBEV_PKG "ev")
+    if( LIBEV_PKG_FOUND )
         include_directories(${LIBEV_PKG_INCLUDE_DIRS})
-        get_filename_component(LIBEV_PKG_LIBRARY_DIRS ${LIBEV_LIB} PATH)
         link_directories(${LIBEV_PKG_LIBRARY_DIRS})
-        set(LIBEV_PKG_LIBRARIES "ev")
-        message(STATUS "Will link with libev found here: ${LIBEV_LIB}")
-        message(STATUS "LIBEV_PKG_INCLUDE_DIRS: ${LIBEV_PKG_INCLUDE_DIRS}")
-        message(STATUS "LIBEV_PKG_LIBRARY_DIRS: ${LIBEV_PKG_LIBRARY_DIRS}")
-    endif( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
-endif( LIBEV_PKG_FOUND )
+    else( LIBEV_PKG_FOUND )
+        # Search for the library in the usual places
+        find_library( LIBEV_LIB ev )
+        if( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
+            message(FATAL_ERROR "Cannot find libev in the library search path")
+        else( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
+            find_path(LIBEV_PKG_INCLUDE_DIRS ev.h)
+            include_directories(${LIBEV_PKG_INCLUDE_DIRS})
+            get_filename_component(LIBEV_PKG_LIBRARY_DIRS ${LIBEV_LIB} PATH)
+            link_directories(${LIBEV_PKG_LIBRARY_DIRS})
+            set(LIBEV_PKG_LIBRARIES "ev")
+            message(STATUS "Will link with libev found here: ${LIBEV_LIB}")
+            message(STATUS "LIBEV_PKG_INCLUDE_DIRS: ${LIBEV_PKG_INCLUDE_DIRS}")
+            message(STATUS "LIBEV_PKG_LIBRARY_DIRS: ${LIBEV_PKG_LIBRARY_DIRS}")
+        endif( "${LIBEV_LIB}" STREQUAL "LIBEV_LIB-NOTFOUND" )
+    endif( LIBEV_PKG_FOUND )
+    
+    target_link_libraries(CDBUS_MAIN_LOOP_EV_SHARED ${LIBEV_PKG_LIBRARIES} "cdbus")
+    target_link_libraries(CDBUS_MAIN_LOOP_EV_STATIC ${LIBEV_PKG_LIBRARIES} "cdbus")
+endif( NOT CDBUS_NO_LIBEV_LOOP )
 
+if( NOT CDBUS_NO_GLIB_LOOP )
+    pkg_check_modules(GLIB_PKG REQUIRED "glib-2.0>=2.0.0")
+    include_directories(${GLIB_PKG_INCLUDE_DIRS})
+    link_directories(${GLIB_PKG_LIBRARY_DIRS})
+    
+    target_link_libraries(CDBUS_MAIN_LOOP_GLIB_SHARED ${GLIB_PKG_LIBRARIES} "cdbus")
+    target_link_libraries(CDBUS_MAIN_LOOP_GLIB_STATIC ${GLIB_PKG_LIBRARIES} "cdbus")
+endif( NOT CDBUS_NO_GLIB_LOOP )
 
-target_link_libraries(CDBUS_SHARED ${DBUSLIB_PKG_LIBRARIES} ${LIBEV_PKG_LIBRARIES})
-target_link_libraries(CDBUS_STATIC ${DBUSLIB_PKG_LIBRARIES} ${LIBEV_PKG_LIBRARIES})
+target_link_libraries(CDBUS_SHARED ${DBUSLIB_PKG_LIBRARIES})
+target_link_libraries(CDBUS_STATIC ${DBUSLIB_PKG_LIBRARIES})
 
 LINK_DIRECTORIES(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
@@ -85,10 +132,22 @@ set(INSTALL_TARGETS_DEFAULT_ARGS
     ARCHIVE DESTINATION lib
 )
 
-#file(GLOB CDBUS_PUBLIC_HDRS "${INCLUDE_DIRS}/cdbus/*.h")
-install(DIRECTORY "${INCLUDE_DIRS}/cdbus" DESTINATION include)
+install(DIRECTORY "${INCLUDE_DIRS}/cdbus" DESTINATION include
+        PATTERN "main-loop-*.h" EXCLUDE)
 install(TARGETS CDBUS_SHARED LIBRARY DESTINATION lib)
 install(TARGETS CDBUS_STATIC ARCHIVE DESTINATION lib)
+
+if( NOT CDBUS_NO_GLIB_LOOP )
+    install(FILES "${INCLUDE_DIRS}/cdbus/main-loop-glib.h" DESTINATION include/cdbus)
+    install(TARGETS CDBUS_MAIN_LOOP_GLIB_SHARED LIBRARY DESTINATION lib)
+    install(TARGETS CDBUS_MAIN_LOOP_GLIB_STATIC ARCHIVE DESTINATION lib)
+endif(NOT CDBUS_NO_GLIB_LOOP)
+
+if( NOT CDBUS_NO_LIBEV_LOOP )
+    install(FILES "${INCLUDE_DIRS}/cdbus/main-loop-ev.h" DESTINATION include/cdbus)
+    install(TARGETS CDBUS_MAIN_LOOP_EV_SHARED LIBRARY DESTINATION lib)
+    install(TARGETS CDBUS_MAIN_LOOP_EV_STATIC ARCHIVE DESTINATION lib)
+endif( NOT CDBUS_NO_LIBEV_LOOP )
 
 # Uninstall target
 configure_file(

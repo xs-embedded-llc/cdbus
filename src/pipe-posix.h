@@ -25,23 +25,27 @@
  *
  *===========================================================================
  *===========================================================================
- * @file           alloc.h
+ * @file           pipe-posix.h
  * @author         Glenn Schmottlach
- * @brief          Declarations of memory allocation routines.
+ * @brief          Defines the details of a POSIX-based pipe.
  *===========================================================================
  */
 
-#ifndef CDBUS_ALLOC_H_
-#define CDBUS_ALLOC_H_
+#ifndef CDBUS_PIPE_POSIX_H_
+#define CDBUS_PIPE_POSIX_H_
 
-#include <stddef.h>
-#include "cdbus/types.h"
+#include "cdbus/cdbus.h"
 
-void* cdbus_malloc(size_t size);
-void* cdbus_calloc(size_t numElt, size_t eltSize);
-void* cdbus_realloc(void* memory, size_t bytes);
-void cdbus_free(void* p);
-void cdbus_freeStringArray(cdbus_Char** strArray);
-cdbus_Char* cdbus_strDup(const cdbus_Char* s);
 
-#endif /* Guard for CDBUS_ALLOC_H_ */
+CDBUS_BEGIN_DECLS
+
+/* Define the POSIX contents of the pipe */
+struct cdbus_Pipe
+{
+    cdbus_Int32  fd[2];
+};
+
+CDBUS_END_DECLS
+
+
+#endif /* Guard for CDBUS_PIPE_POSIX_H_ */

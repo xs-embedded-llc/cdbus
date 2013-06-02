@@ -35,7 +35,7 @@
 #include "condvar.h"
 #include "condvar-posix.h"
 #include "mutex-posix.h"
-#include "alloc.h"
+#include "cdbus/alloc.h"
 
 cdbus_CondVar*
 cdbus_condVarNew()

@@ -41,47 +41,44 @@
 #include "watch-priv.h"
 #include "timeout-priv.h"
 #include "mutex.h"
-#include "semaphore.h"
+#include "pipe.h"
 
 CDBUS_BEGIN_DECLS
 
 
 struct cdbus_Dispatcher
 {
-#if EV_MULTIPLICITY
-    EV_P;
-#endif
-    cdbus_Bool                                  ownsLoop;
+    cdbus_MainLoop*                             loop;
     LIST_HEAD(cdbus_ConnHead,cdbus_Connection)  connections;
     LIST_HEAD(cdbus_WatchHead, cdbus_Watch)     watches;
     LIST_HEAD(cdbus_TimeoutHead, cdbus_Timeout) timeouts;
     cdbus_Atomic                                refCnt;
-    ev_async                                    asyncWatch;
     CDBUS_LOCK_DECLARE(lock);
-    cdbus_WakeupFunc                            wakeupFunc;
-    void*                                       wakeupData;
+    cdbus_Pipe*                                 wakeupPipe;
+    cdbus_MainLoopWatch*                        wakeupWatch;
+    cdbus_Bool                                  wakeupTrigger;
     cdbus_FinalizerFunc                         finalizerFunc;
     void*                                       finalizerData;
-    cdbus_Semaphore*                            barrier;
     cdbus_Bool                                  dispatchNeeded;
     volatile cdbus_Bool                         exitLoop;
 };
 
-cdbus_HResult cdbus_dispatcherAddConnection(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherAddConnection(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Connection* conn);
-cdbus_HResult cdbus_dispatcherRemoveConnection(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherRemoveConnection(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Connection* conn);
-struct cdbus_Connection* cdbus_dispatcherGetDbusConnOwner(CDBUS_DISPATCHER_P,
+struct cdbus_Connection* cdbus_dispatcherGetDbusConnOwner(
+                                                cdbus_Dispatcher* dispatcher,
                                                 DBusConnection* dbusConn);
-void cdbus_dispatcherWakeup(CDBUS_DISPATCHER_P);
+void cdbus_dispatcherWakeup(cdbus_Dispatcher* dispatcher);
 
-cdbus_HResult cdbus_dispatcherAddWatch(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherAddWatch(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Watch* watch);
-cdbus_HResult cdbus_dispatcherRemoveWatch(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherRemoveWatch(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Watch* watch);
-cdbus_HResult cdbus_dispatcherAddTimeout(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherAddTimeout(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Timeout* timeout);
-cdbus_HResult cdbus_dispatcherRemoveTimeout(CDBUS_DISPATCHER_P,
+cdbus_HResult cdbus_dispatcherRemoveTimeout(cdbus_Dispatcher* dispatcher,
                        struct cdbus_Timeout* timeout);
 
 CDBUS_END_DECLS

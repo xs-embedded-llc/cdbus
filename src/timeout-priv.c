@@ -38,39 +38,30 @@
 #include <assert.h>
 #include "cdbus/timeout.h"
 #include "cdbus/dispatcher.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
+#include "cdbus/mainloop.h"
 #include "timeout-priv.h"
 #include "dispatcher-priv.h"
-#include "atomic-ops.h"
-#include "alloc.h"
 #include "trace.h"
 #include "internal.h"
-
-#if EV_MULTIPLICITY
-#define CDBUS_TIMEOUT_LOOP    t->dispatcher->loop
-#define CDBUS_TIMEOUT_LOOP_   CDBUS_TIMEOUT_LOOP,
-#else
-#define CDBUS_TIMEOUT_LOOP
-#define CDBUS_TIMEOUT_LOOP_
-#endif
 
 static void
 cdbus_timerCallback
     (
-    EV_P_
-    ev_timer*   evTimer,
-    int         rcvEvents
+    cdbus_MainLoopTimer*    timer,
+    void*                   userData
     )
 {
-    cdbus_Timeout* t = evTimer->data;
+    cdbus_Timeout* t = (cdbus_Timeout*)userData;
     cdbus_TimeoutHandler handler = NULL;
+    cdbus_MainLoop* loop;
     void* data = NULL;
-
-    CDBUS_EV_UNUSED(EV_A);
-    CDBUS_UNUSED(rcvEvents);
 
     if ( NULL == t )
     {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Can't cast to timeout in timer event callback"));
+        CDBUS_TRACE((CDBUS_TRC_ERROR,
+            "Can't cast to timeout in timer event callback"));
     }
     else
     {
@@ -86,6 +77,7 @@ cdbus_timerCallback
         CDBUS_LOCK(t->lock);
         handler = t->handler;
         data = t->data;
+        loop = t->dispatcher->loop;
 
         if ( NULL != handler )
         {
@@ -102,18 +94,19 @@ cdbus_timerCallback
         if ( t->enabled && t->repeat )
         {
             /* If it's not currently active then ... */
-            if ( !ev_is_active(&t->timerWatcher) )
+            if ( !loop->timerIsEnabled(timer) )
             {
-                ev_timer_again(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+
+                loop->timerStart(timer);
                 cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
         else
         {
             /* If it's currently active then ... */
-            if ( ev_is_active(&t->timerWatcher) )
+            if ( loop->timerIsEnabled(timer) )
             {
-                ev_timer_stop(CDBUS_TIMEOUT_LOOP_  &t->timerWatcher);
+                loop->timerStop(timer);
                 cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
@@ -135,7 +128,6 @@ cdbus_timeoutNew
     )
 {
     cdbus_Timeout* timeout = NULL;
-    ev_tstamp period = 0;
 
     if ( NULL != dispatcher )
     {
@@ -150,18 +142,27 @@ cdbus_timeoutNew
             }
             else
             {
-                period = (ev_tstamp)msecInterval / 1000.0;
-                ev_timer_init(&timeout->timerWatcher, cdbus_timerCallback,
-                              0.0, period);
-                timeout->dispatcher = cdbus_dispatcherRef(dispatcher);
-                timeout->data = data;
-                timeout->timerWatcher.data = timeout;
-                timeout->handler = h;
-                timeout->repeat = repeat;
-                timeout->enabled = CDBUS_FALSE;
-                timeout = cdbus_timeoutRef(timeout);
-                CDBUS_TRACE((CDBUS_TRC_INFO,
-                      "Created timeout instance (%p)", (void*)timeout));
+                timeout->timer = dispatcher->loop->timerNew(dispatcher->loop,
+                                            (cdbus_UInt32)msecInterval,
+                                            cdbus_timerCallback,
+                                            timeout);
+                if ( NULL == timeout->timer )
+                {
+                    CDBUS_LOCK_FREE(timeout->lock);
+                    cdbus_free(timeout);
+                    timeout = NULL;
+                }
+                else
+                {
+                    timeout->dispatcher = cdbus_dispatcherRef(dispatcher);
+                    timeout->data = data;
+                    timeout->handler = h;
+                    timeout->repeat = repeat;
+                    timeout->enabled = CDBUS_FALSE;
+                    timeout = cdbus_timeoutRef(timeout);
+                    CDBUS_TRACE((CDBUS_TRC_INFO,
+                          "Created timeout instance (%p)", (void*)timeout));
+                }
             }
         }
     }
@@ -204,10 +205,11 @@ cdbus_timeoutUnref
         if ( 1 == value )
         {
             CDBUS_LOCK(t->lock);
-            if ( ev_is_active(&t->timerWatcher) )
+            if (  t->dispatcher->loop->timerIsEnabled(t->timer) )
             {
-                ev_timer_stop(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+                t->dispatcher->loop->timerStop(t->timer);
             }
+            t->dispatcher->loop->timerDestroy(t->timer);
             cdbus_dispatcherUnref(t->dispatcher);
             CDBUS_UNLOCK(t->lock);
             CDBUS_LOCK_FREE(t->lock);
@@ -268,9 +270,9 @@ cdbus_timeoutEnable
         if ( option )
         {
             /* If it's not currently active then ... */
-            if ( !ev_is_active(&t->timerWatcher) )
+            if ( !t->dispatcher->loop->timerIsEnabled(t->timer) )
             {
-                ev_timer_again(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+                t->dispatcher->loop->timerStart(t->timer);
                 cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
@@ -278,9 +280,9 @@ cdbus_timeoutEnable
         else
         {
             /* If the watch is currently active then */
-            if ( ev_is_active(&t->timerWatcher) )
+            if ( t->dispatcher->loop->timerIsEnabled(t->timer) )
             {
-                ev_timer_stop(CDBUS_TIMEOUT_LOOP_  &t->timerWatcher);
+                t->dispatcher->loop->timerStop(t->timer);
                 cdbus_dispatcherWakeup(t->dispatcher);
             }
         }
@@ -312,7 +314,7 @@ cdbus_timeoutInterval
     else
     {
         CDBUS_LOCK(t->lock);
-        period = (cdbus_Int32)(t->timerWatcher.repeat * 1000);
+        period = t->dispatcher->loop->timerGetInterval(t->timer);
         CDBUS_UNLOCK(t->lock);
     }
 
@@ -341,7 +343,8 @@ cdbus_timeoutSetInterval
     else
     {
         CDBUS_LOCK(t->lock);
-        t->timerWatcher.repeat = (ev_tstamp)msecInterval / 1000.0;
+        t->dispatcher->loop->timerSetInterval(t->timer,
+                                            (cdbus_UInt32)msecInterval);
         CDBUS_UNLOCK(t->lock);
     }
 
@@ -442,7 +445,7 @@ cdbus_timeoutSetRepeat
             {
                 /* User wants to repeat the timeout and the timeout is enabled
                  * so we'll re-start the timeout */
-                ev_timer_again(CDBUS_TIMEOUT_LOOP_ &t->timerWatcher);
+                t->dispatcher->loop->timerStart(t->timer);
                 cdbus_dispatcherWakeup(t->dispatcher);
             }
         }

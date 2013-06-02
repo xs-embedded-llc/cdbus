@@ -36,8 +36,8 @@
 #include <stdlib.h>
 #include "match.h"
 #include "trace.h"
-#include "alloc.h"
-#include "atomic-ops.h"
+#include "cdbus/alloc.h"
+#include "cdbus/atomic-ops.h"
 
 static
 int compareArgs

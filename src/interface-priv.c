@@ -35,7 +35,7 @@
 #include <assert.h>
 #include "dbus/dbus.h"
 #include "interface-priv.h"
-#include "alloc.h"
+#include "cdbus/alloc.h"
 #include "trace.h"
 
 #define CDBUS_INTERFACE_INITIAL_BUF_CAPACITY    (512)

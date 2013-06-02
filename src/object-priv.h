@@ -33,9 +33,9 @@
 
 #include "cdbus/connection.h"
 #include "cdbus/object.h"
+#include "cdbus/atomic-ops.h"
 #include "dbus/dbus.h"
 #include "string-pointer-map.h"
-#include "atomic-ops.h"
 #include "mutex.h"
 #include "interface-priv.h"
 

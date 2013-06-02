@@ -37,7 +37,7 @@
 #include "semaphore.h"
 #include "semaphore-posix.h"
 #include "trace.h"
-#include "alloc.h"
+#include "cdbus/alloc.h"
 
 cdbus_Semaphore*
 cdbus_semaphoreNew

@@ -33,9 +33,9 @@
 #include <string.h>
 #include <assert.h>
 #include "string-pointer-map.h"
-#include "atomic-ops.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
 #include "uthash.h"
-#include "alloc.h"
 #include "mutex.h"
 
 

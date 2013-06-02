@@ -25,29 +25,23 @@
  *
  *===========================================================================
  *===========================================================================
- * @file           internal.h        
+ * @file           alloc.h
  * @author         Glenn Schmottlach
- * @brief          Internal declarations and globals
+ * @brief          Declarations of memory allocation routines.
  *===========================================================================
  */
 
-#ifndef CDBUS_INTERNAL_H_
-#define CDBUS_INTERNAL_H_
+#ifndef CDBUS_ALLOC_H_
+#define CDBUS_ALLOC_H_
 
 #include <stddef.h>
 #include "cdbus/types.h"
-#include "cdbus/macros.h"
-#include "pointer-pointer-map.h"
-#include "mutex.h"
 
+CDBUS_EXPORT void* cdbus_malloc(size_t size);
+CDBUS_EXPORT void* cdbus_calloc(size_t numElt, size_t eltSize);
+CDBUS_EXPORT void* cdbus_realloc(void* memory, size_t bytes);
+CDBUS_EXPORT void cdbus_free(void* p);
+CDBUS_EXPORT void cdbus_freeStringArray(cdbus_Char** strArray);
+CDBUS_EXPORT cdbus_Char* cdbus_strDup(const cdbus_Char* s);
 
-/*
- * Global variables
- */
-
-/* Module-wide locks */
-extern cdbus_Mutex* cdbus_gAtomicOpLock;
-extern cdbus_PtrPtrMap* cdbus_gDispatcherRegistry;
-
-
-#endif /* Guard for CDBUS_INTERNAL_H_ */
+#endif /* Guard for CDBUS_ALLOC_H_ */

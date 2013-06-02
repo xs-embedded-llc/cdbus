@@ -36,7 +36,9 @@
 
 #include "cdbus/macros.h"
 #include "cdbus/types.h"
+#include "cdbus/atomic-ops.h"
 #include "cdbus/error.h"
+#include "cdbus/alloc.h"
 #include "cdbus/init.h"
 #include "cdbus/connection.h"
 #include "cdbus/dispatcher.h"
@@ -47,5 +49,6 @@
 #include "cdbus/introspect.h"
 #include "cdbus/stringbuffer.h"
 #include "cdbus/tracectrl.h"
+#include "cdbus/mainloop.h"
 
 #endif /* Guard for CDBUS_CDBUS_H_ */

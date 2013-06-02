@@ -25,29 +25,23 @@
  *
  *===========================================================================
  *===========================================================================
- * @file           internal.h        
+ * @file           atomic-ops.h        
  * @author         Glenn Schmottlach
- * @brief          Internal declarations and globals
+ * @brief          Declaration of supported atomic operations.
  *===========================================================================
  */
 
-#ifndef CDBUS_INTERNAL_H_
-#define CDBUS_INTERNAL_H_
+#ifndef CDBUS_ATOMIC_OPS_H_
+#define CDBUS_ATOMIC_OPS_H_
 
-#include <stddef.h>
 #include "cdbus/types.h"
-#include "cdbus/macros.h"
-#include "pointer-pointer-map.h"
-#include "mutex.h"
 
+CDBUS_BEGIN_DECLS
 
-/*
- * Global variables
- */
+CDBUS_EXPORT cdbus_Int32 cdbus_atomicAdd(cdbus_Atomic* a, cdbus_Int32 v);
+CDBUS_EXPORT cdbus_Int32 cdbus_atomicSub(cdbus_Atomic* a, cdbus_Int32 v);
+CDBUS_EXPORT cdbus_Int32 cdbus_atomicGet(cdbus_Atomic* a);
 
-/* Module-wide locks */
-extern cdbus_Mutex* cdbus_gAtomicOpLock;
-extern cdbus_PtrPtrMap* cdbus_gDispatcherRegistry;
+CDBUS_END_DECLS
 
-
-#endif /* Guard for CDBUS_INTERNAL_H_ */
+#endif /* Guard for CDBUS_ATOMIC_OPS_H_ */

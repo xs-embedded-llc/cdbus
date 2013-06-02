@@ -94,4 +94,6 @@
                         (CDBUS_MINOR_VERSION << 8) | \
                         (CDBUS_RELEASE_VERSION))
 
+#define CDBUS_UNUSED(X) (void)(X)
+
 #endif /* Guard for CDBUS_MACROS_H_ */

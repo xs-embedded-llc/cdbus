@@ -34,80 +34,33 @@
 #include <assert.h>
 #include "cdbus/watch.h"
 #include "cdbus/dispatcher.h"
-#include "atomic-ops.h"
+#include "cdbus/atomic-ops.h"
+#include "cdbus/alloc.h"
+#include "cdbus/mainloop.h"
 #include "watch-priv.h"
 #include "dispatcher-priv.h"
-#include "alloc.h"
 #include "trace.h"
 #include "internal.h"
 
-#if EV_MULTIPLICITY
-#define CDBUS_WATCH_LOOP    w->dispatcher->loop
-#define CDBUS_WATCH_LOOP_   CDBUS_WATCH_LOOP,
-#else
-#define CDBUS_WATCH_LOOP
-#define CDBUS_WATCH_LOOP_
-#endif
-
-static cdbus_UInt32
-cdbus_convertToEvFlags
-    (
-    cdbus_UInt32 dbusFlags
-    )
-{
-    cdbus_UInt32 evFlags = 0U;
-
-    if ( dbusFlags & DBUS_WATCH_READABLE ) evFlags |= EV_READ;
-    if ( dbusFlags & DBUS_WATCH_WRITABLE ) evFlags |= EV_WRITE;
-
-    if ( dbusFlags & DBUS_WATCH_ERROR )
-    {
-        evFlags |= EV_ERROR;
-    }
-
-    if ( dbusFlags & DBUS_WATCH_HANGUP )
-    {
-        evFlags |= EV_CUSTOM | EV_ERROR;
-    }
-
-    return evFlags;
-}
-
-
-static cdbus_UInt32
-cdbus_convertToDbusFlags
-    (
-    cdbus_UInt32 evFlags
-    )
-{
-    cdbus_UInt32 dbusFlags = 0U;
-
-    if ( evFlags & EV_READ ) dbusFlags |= DBUS_WATCH_READABLE;
-    if ( evFlags & EV_WRITE ) dbusFlags |= DBUS_WATCH_WRITABLE;
-    if ( evFlags & EV_ERROR ) dbusFlags |= DBUS_WATCH_ERROR;
-    if ( evFlags & EV_CUSTOM ) dbusFlags |= DBUS_WATCH_HANGUP;
-
-    return dbusFlags;
-}
-
 
 static void
-cdbus_ioWatchCallback
+cdbus_watchCallback
     (
-    EV_P_
-    ev_io*  evIo,
-    int rcvEvents
+    cdbus_MainLoopWatch*    watch,
+    cdbus_UInt32            flags,
+    void*                   userData
     )
 {
-    cdbus_Watch* w = evIo->data;
+    cdbus_Watch* w = (cdbus_Watch*)userData;
     cdbus_WatchHandler handler = NULL;
     void* data = NULL;
 
-    CDBUS_EV_UNUSED(EV_A);
+    CDBUS_UNUSED(watch);
 
     if ( NULL == w )
     {
-        CDBUS_TRACE((CDBUS_TRC_ERROR, "Can't cast to watch in IO event callback"));
+        CDBUS_TRACE((CDBUS_TRC_ERROR,
+            "Can't cast to watch in event callback"));
     }
     else
     {
@@ -127,7 +80,7 @@ cdbus_ioWatchCallback
 
         if ( NULL != handler )
         {
-            handler(w, cdbus_convertToDbusFlags(rcvEvents), data);
+            handler(w, flags, data);
         }
         else
         {
@@ -149,35 +102,47 @@ cdbus_watchNew
     void*                       data
     )
 {
-    cdbus_Watch* watch = NULL;
+    cdbus_Watch* w = NULL;
 
     if ( NULL != dispatcher )
     {
-        watch = cdbus_calloc(1, sizeof(*watch));
-        if ( NULL != watch )
+        w = cdbus_calloc(1, sizeof(*w));
+        if ( NULL != w )
         {
-            CDBUS_LOCK_ALLOC(watch->lock, CDBUS_MUTEX_RECURSIVE);
-            if ( CDBUS_LOCK_IS_NULL(watch->lock) )
+            CDBUS_LOCK_ALLOC(w->lock, CDBUS_MUTEX_RECURSIVE);
+            if ( CDBUS_LOCK_IS_NULL(w->lock) )
             {
-                cdbus_free(watch);
-                watch = NULL;
+                cdbus_free(w);
+                w = NULL;
             }
             else
             {
-                ev_io_init(&watch->ioWatcher, cdbus_ioWatchCallback,
-                            fd, cdbus_convertToEvFlags(flags));
-                watch->dispatcher = cdbus_dispatcherRef(dispatcher);
-                watch->data = data;
-                watch->ioWatcher.data = watch;
-                watch->handler = h;
-                watch = cdbus_watchRef(watch);
-                CDBUS_TRACE((CDBUS_TRC_INFO,
-                     "Created watch instance (%p)", (void*)watch));
+                w->watch = dispatcher->loop->watchNew(
+                                        dispatcher->loop,
+                                        fd,
+                                        flags,
+                                        cdbus_watchCallback,
+                                        w);
+                if ( NULL == w->watch )
+                {
+                    CDBUS_LOCK_FREE(w->lock);
+                    cdbus_free(w);
+                    w = NULL;
+                }
+                else
+                {
+                    w->dispatcher = cdbus_dispatcherRef(dispatcher);
+                    w->data = data;
+                    w->handler = h;
+                    w = cdbus_watchRef(w);
+                    CDBUS_TRACE((CDBUS_TRC_INFO,
+                         "Created watch instance (%p)", (void*)w));
+                }
             }
         }
     }
 
-    return watch;
+    return w;
 }
 
 
@@ -216,10 +181,11 @@ cdbus_watchUnref
         if ( 1 == value )
         {
             CDBUS_LOCK(w->lock);
-            if ( ev_is_active(&w->ioWatcher) )
+            if ( w->dispatcher->loop->watchIsEnabled(w->watch) )
             {
-                ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+                w->dispatcher->loop->watchStop(w->watch);
             }
+            w->dispatcher->loop->watchDestroy(w->watch);
             cdbus_dispatcherUnref(w->dispatcher);
             CDBUS_UNLOCK(w->lock);
             CDBUS_LOCK_FREE(w->lock);
@@ -241,7 +207,7 @@ cdbus_watchGetDescriptor
 
     if ( NULL != w )
     {
-        fd = w->ioWatcher.fd;
+        fd = w->dispatcher->loop->watchGetDescriptor(w->watch);
     }
 
     return fd;
@@ -265,7 +231,7 @@ cdbus_watchGetFlags
     else
     {
         CDBUS_LOCK(w->lock);
-        flags = cdbus_convertToDbusFlags(w->ioWatcher.events);
+        flags = w->dispatcher->loop->watchGetFlags(w->watch);
         CDBUS_UNLOCK(w->lock);
     }
 
@@ -295,22 +261,22 @@ cdbus_watchSetFlags
     {
         CDBUS_LOCK(w->lock);
         /* If the watch is active then ... */
-        if ( ev_is_active(&w->ioWatcher) )
+        if ( w->dispatcher->loop->watchIsEnabled(w->watch) )
         {
             /* You can't change the flags of an active watcher */
-            ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+            w->dispatcher->loop->watchStop(w->watch);
 
             /* Change the flags */
-            ev_io_set(&w->ioWatcher, w->ioWatcher.fd, cdbus_convertToEvFlags(flags));
+            w->dispatcher->loop->watchSetFlags(w->watch, flags);
 
             /* Now start the watcher again */
-            ev_io_start(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+            w->dispatcher->loop->watchStart(w->watch);
         }
         /* Else the watcher is not active and being managed */
         else
         {
             /* Directly update the flags since it's not running */
-            ev_io_set(&w->ioWatcher, w->ioWatcher.fd, cdbus_convertToEvFlags(flags));
+            w->dispatcher->loop->watchSetFlags(w->watch, flags);
         }
         CDBUS_UNLOCK(w->lock);
     }
@@ -336,7 +302,7 @@ cdbus_watchIsEnabled
     else
     {
         CDBUS_LOCK(w->lock);
-        isEnabled = ev_is_active(&w->ioWatcher);
+        isEnabled = w->dispatcher->loop->watchIsEnabled(w->watch);
         CDBUS_UNLOCK(w->lock);
     }
 
@@ -372,10 +338,10 @@ cdbus_watchEnable
             /* If it's not currently active (and thus managed by
              * the dispatcher) then ...
              */
-            if ( !ev_is_active(&w->ioWatcher) )
+            if ( !w->dispatcher->loop->watchIsEnabled(w->watch) )
             {
                 /* Start the watch */
-                ev_io_start(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+                w->dispatcher->loop->watchStart(w->watch);
                 cdbus_dispatcherWakeup(w->dispatcher);
             }
         }
@@ -384,10 +350,10 @@ cdbus_watchEnable
             /* If the watch is currently active then
              * this implies that the dispatcher is managing it.
              */
-            if ( ev_is_active(&w->ioWatcher) )
+            if ( w->dispatcher->loop->watchIsEnabled(w->watch) )
             {
                 /* Start the watch */
-                ev_io_stop(CDBUS_WATCH_LOOP_ &w->ioWatcher);
+                w->dispatcher->loop->watchStop(w->watch);
                 cdbus_dispatcherWakeup(w->dispatcher);
             }
         }
@@ -442,14 +408,4 @@ cdbus_watchSetData
         w->data = data;
         CDBUS_UNLOCK(w->lock);
     }
-}
-
-
-cdbus_UInt32
-cdbus_watchClearPending
-    (
-    cdbus_Watch*    w
-    )
-{
-    return ev_clear_pending(CDBUS_WATCH_LOOP_ &w->ioWatcher);
 }

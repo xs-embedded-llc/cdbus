@@ -35,8 +35,10 @@
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.option.optimization.level.1239192118" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" value="gnu.c.optimization.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1882135143" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.1328936282" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/usr/include/dbus-1.0"/>
-									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/dbus-1.0/include"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/include/dbus-1.0"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/include/glib-2.0"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib/dbus-1.0/include"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib/glib-2.0/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/include}&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.misc.other.924680720" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -fPIC  -fno-strict-aliasing" valueType="string"/>
@@ -57,6 +59,7 @@
 								</option>
 								<option id="gnu.c.link.option.libs.537347943" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="dbus-1"/>
+									<listOptionValue builtIn="false" value="glib-2.0"/>
 									<listOptionValue builtIn="false" value="ev"/>
 								</option>
 								<option id="gnu.c.link.option.shared.1850624971" name="Shared (-shared)" superClass="gnu.c.link.option.shared" value="true" valueType="boolean"/>
@@ -114,8 +117,10 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.220634144" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" value="gnu.c.optimization.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.856657196" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.411038146" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/usr/include/dbus-1.0"/>
-									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/dbus-1.0/include"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/include/dbus-1.0"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/include/glib-2.0"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib/dbus-1.0/include"/>
+									<listOptionValue builtIn="false" value="/usr/local/sdk-imx6/arm-oe-linux-gnueabi/usr/lib/glib-2.0/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/include}&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.misc.other.186538642" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -fmessage-length=0 -fPIC  -fno-strict-aliasing" valueType="string"/>
@@ -136,6 +141,7 @@
 								</option>
 								<option id="gnu.c.link.option.libs.131717400" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="dbus-1"/>
+									<listOptionValue builtIn="false" value="glib-2.0"/>
 									<listOptionValue builtIn="false" value="ev"/>
 								</option>
 								<option id="gnu.c.link.option.shared.1432060403" name="Shared (-shared)" superClass="gnu.c.link.option.shared" value="true" valueType="boolean"/>
@@ -197,6 +203,8 @@
 								<option id="gnu.c.compiler.exe.debug.option.debugging.level.238503315" name="Debug Level" superClass="gnu.c.compiler.exe.debug.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.2056289674" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/dbus-1.0"/>
+									<listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
+									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/glib-2.0/include"/>
 									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/dbus-1.0/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/include}&quot;"/>
 								</option>
@@ -215,6 +223,7 @@
 								</option>
 								<option id="gnu.c.link.option.libs.1212962029" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="dbus-1"/>
+									<listOptionValue builtIn="false" value="glib-2.0"/>
 									<listOptionValue builtIn="false" value="ev"/>
 								</option>
 								<option id="gnu.c.link.option.shared.1462031276" name="Shared (-shared)" superClass="gnu.c.link.option.shared" value="true" valueType="boolean"/>
@@ -275,6 +284,8 @@
 								<option id="gnu.c.compiler.exe.release.option.debugging.level.44503820" name="Debug Level" superClass="gnu.c.compiler.exe.release.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.456034054" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/include/dbus-1.0"/>
+									<listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
+									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/glib-2.0/include"/>
 									<listOptionValue builtIn="false" value="/usr/lib/x86_64-linux-gnu/dbus-1.0/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/include}&quot;"/>
 								</option>
@@ -293,6 +304,7 @@
 								</option>
 								<option id="gnu.c.link.option.libs.665483794" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="dbus-1"/>
+									<listOptionValue builtIn="false" value="glib-2.0"/>
 									<listOptionValue builtIn="false" value="ev"/>
 								</option>
 								<option id="gnu.c.link.option.shared.1271897516" name="Shared (-shared)" superClass="gnu.c.link.option.shared" value="true" valueType="boolean"/>

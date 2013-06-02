@@ -35,8 +35,8 @@
 #include <string.h>
 #include <assert.h>
 #include "cdbus/stringbuffer.h"
+#include "cdbus/alloc.h"
 #include "stringbuffer-priv.h"
-#include "alloc.h"
 
 #define CDBUS_STRINGBUFFER_GROWTH_FACTOR    (1.25)
 #define CDBUS_STRINGBUFFER_DEFAULT_SIZE     (128)

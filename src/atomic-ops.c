@@ -33,7 +33,7 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include "atomic-ops.h"
+#include "cdbus/atomic-ops.h"
 #include "mutex.h"
 #include "internal.h"
 

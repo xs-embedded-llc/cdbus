@@ -38,7 +38,7 @@
 #include "mutex.h"
 #include "mutex-posix.h"
 #include "trace.h"
-#include "alloc.h"
+#include "cdbus/alloc.h"
 
 cdbus_Mutex*
 cdbus_mutexNew

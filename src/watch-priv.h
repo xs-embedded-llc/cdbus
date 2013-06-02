@@ -38,18 +38,19 @@
 #include "cdbus/watch.h"
 #include "queue.h"
 #include "mutex.h"
-#include "ev.h"
 
+/* Forward declarations */
+struct cdbus_MainLoopWatch;
 
 struct cdbus_Watch
 {
-    cdbus_Dispatcher*       dispatcher;
-    cdbus_Atomic            refCnt;
-    ev_io                   ioWatcher;
-    void*                   data;
-    cdbus_WatchHandler      handler;
+    cdbus_Dispatcher*           dispatcher;
+    cdbus_Atomic                refCnt;
+    struct cdbus_MainLoopWatch* watch;
+    void*                       data;
+    cdbus_WatchHandler          handler;
     CDBUS_LOCK_DECLARE(lock);
-    LIST_ENTRY(cdbus_Watch) link;
+    LIST_ENTRY(cdbus_Watch)     link;
 };
 
 

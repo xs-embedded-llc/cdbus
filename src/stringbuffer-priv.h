@@ -36,7 +36,7 @@
 
 #include "cdbus/macros.h"
 #include "cdbus/types.h"
-#include "atomic-ops.h"
+#include "cdbus/atomic-ops.h"
 
 CDBUS_BEGIN_DECLS
 

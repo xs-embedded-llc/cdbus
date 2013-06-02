@@ -25,94 +25,117 @@
  *
  *===========================================================================
  *===========================================================================
- * @file           alloc.c
+ * @file           pipe-posix.c
  * @author         Glenn Schmottlach
- * @brief          Implementation of general allocation functions.
+ * @brief          Posix implementation of a pipe.
  *===========================================================================
  */
-#include <string.h>
-#include "dbus/dbus.h"
+
+#include <unistd.h>
+#include <fcntl.h>
+#include "pipe.h"
+#include "pipe-posix.h"
 #include "cdbus/alloc.h"
 
-void*
-cdbus_malloc
-    (
-    size_t  size
-    )
+cdbus_Pipe*
+cdbus_pipeNew()
 {
-    return dbus_malloc(size);
-}
+    cdbus_Int32 rc;
+    cdbus_Pipe* p = cdbus_calloc(1, sizeof(*p));
+    if ( NULL != p )
+    {
+        rc = pipe(p->fd);
+        if ( 0 != rc )
+        {
+            cdbus_free(p);
+            p = NULL;
+        }
+        else
+        {
+            rc = fcntl(p->fd[0], F_SETFL, O_NONBLOCK);
+            if ( 0 == rc ) rc = fcntl(p->fd[1], F_SETFL, O_NONBLOCK);
 
+            if (0 != rc)
+            {
+                cdbus_pipeDestroy(p);
+                p = NULL;
+            }
+        }
+    }
 
-void*
-cdbus_calloc
-    (
-    size_t  nElt,
-    size_t  eltSize
-    )
-{
-    return dbus_malloc0(nElt * eltSize);
-}
-
-
-void*
-cdbus_realloc
-    (
-    void*   memory,
-    size_t  bytes
-    )
-{
-    return dbus_realloc(memory, bytes);
+    return p;
 }
 
 
 void
-cdbus_free
+cdbus_pipeDestroy
     (
-    void*   p
+    cdbus_Pipe*  pipe
     )
 {
-    if ( NULL != p )
+    if ( NULL != pipe )
     {
-        dbus_free(p);
+        close(pipe->fd[0]);
+        close(pipe->fd[1]);
     }
 }
 
 
-void cdbus_freeStringArray
+void
+cdbus_pipeGetFds
     (
-    cdbus_Char**    strArray
+    cdbus_Pipe*         pipe,
+    cdbus_Descriptor*   readFd,
+    cdbus_Descriptor*   writeFd
     )
 {
-    cdbus_UInt32    idx = 0;
-
-    if ( NULL != strArray )
+    if ( NULL != pipe )
     {
-        while ( NULL != strArray[idx] )
+        if ( NULL != readFd )
         {
-            cdbus_free(strArray[idx]);
+            *readFd = pipe->fd[0];
         }
-        cdbus_free(strArray);
+
+        if ( NULL != writeFd )
+        {
+            *writeFd = pipe->fd[1];
+        }
     }
 }
 
-cdbus_Char*
-cdbus_strDup
+
+cdbus_Int32
+cdbus_pipeRead
     (
-    const cdbus_Char*   s
+    cdbus_Pipe*     pipe,
+    void*           buf,
+    cdbus_UInt32    count
     )
 {
-    cdbus_Char* p = NULL;
+    cdbus_Int32 numRead = -1;
 
-    if ( NULL != s )
+    if ( NULL != pipe )
     {
-        p = cdbus_malloc(strlen(s) + sizeof(cdbus_Char));
-        if ( NULL != p )
-        {
-            p[0] = '\0';
-            strcat(p, s);
-        }
+        numRead = read(pipe->fd[0], buf, count);
     }
-    return p;
+    return numRead;
+}
+
+
+cdbus_Int32
+cdbus_pipeWrite
+    (
+    cdbus_Pipe*     pipe,
+    const void*     buf,
+    cdbus_UInt32    count
+    )
+{
+    cdbus_Int32 numWritten = -1;
+
+    if ( NULL != pipe )
+    {
+        numWritten = write(pipe->fd[1], buf, count);
+    }
+    return numWritten;
 }
 

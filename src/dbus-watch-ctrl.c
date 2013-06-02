@@ -33,7 +33,7 @@
 #include <assert.h>
 #include "dbus-watch-ctrl.h"
 #include "trace.h"
-#include "alloc.h"
+#include "cdbus/alloc.h"
 #include "dispatcher-priv.h"
 #include "connection-priv.h"
 #include "internal.h"
