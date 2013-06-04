@@ -42,7 +42,7 @@ add_dependencies(CDBUS_SHARED CDBUS_STATIC)
 
                       
 # The libev main loop library
-if( NOT CDBUS_NO_GLIB_LOOP )
+if( NOT CDBUS_NO_LIBEV_LOOP )
     add_library(CDBUS_MAIN_LOOP_EV_STATIC STATIC ${CDBUS_MAIN_LOOP_EV_SRC_FILES})
     set_target_properties(CDBUS_MAIN_LOOP_EV_STATIC PROPERTIES OUTPUT_NAME cdbus-ev)
     add_library(CDBUS_MAIN_LOOP_EV_SHARED SHARED ${CDBUS_MAIN_LOOP_EV_SRC_FILES})
@@ -53,11 +53,11 @@ if( NOT CDBUS_NO_GLIB_LOOP )
                           VERSION "${CDBUS_VERSION_STRING}")
     # This forces the builds to serialize
     add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_MAIN_LOOP_EV_STATIC)
-endif( NOT CDBUS_NO_GLIB_LOOP )
+endif( NOT CDBUS_NO_LIBEV_LOOP )
 
                       
 # The glib main loop library
-if( NOT CDBUS_NO_LIBEV_LOOP )
+if( NOT CDBUS_NO_GLIB_LOOP )
     add_library(CDBUS_MAIN_LOOP_GLIB_STATIC STATIC ${CDBUS_MAIN_LOOP_GLIB_SRC_FILES})
     set_target_properties(CDBUS_MAIN_LOOP_GLIB_STATIC PROPERTIES OUTPUT_NAME cdbus-glib)
     add_library(CDBUS_MAIN_LOOP_GLIB_SHARED SHARED ${CDBUS_MAIN_LOOP_GLIB_SRC_FILES})
@@ -68,7 +68,7 @@ if( NOT CDBUS_NO_LIBEV_LOOP )
                           VERSION "${CDBUS_VERSION_STRING}")
     # This forces the builds to serialize
     add_dependencies(CDBUS_MAIN_LOOP_GLIB_SHARED CDBUS_MAIN_LOOP_GLIB_STATIC)
-endif( NOT CDBUS_NO_LIBEV_LOOP )
+endif( NOT CDBUS_NO_GLIB_LOOP )
 
 
 
