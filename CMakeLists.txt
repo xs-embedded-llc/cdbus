@@ -197,6 +197,33 @@ install_pkg_config_file(cdbus
     REQUIRES dbus-1
     VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
 
+if( NOT CDBUS_NO_LIBEV_LOOP )
+    if( LIBEV_PKG_FOUND )
+        install_pkg_config_file(cdbus-ev
+            DESCRIPTION "Libev main loop binding for CDBUS."
+            CFLAGS
+            LIBS -lcdbus-ev
+            REQUIRES ${LIBEV_PKG_LIBRARIES} cdbus
+            VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
+     else( LIBEV_PKG_FOUND )
+        install_pkg_config_file(cdbus-ev
+            DESCRIPTION "Libev main loop binding for CDBUS."
+            CFLAGS
+            LIBS -lcdbus-ev -l${LIBEV_PKG_LIBRARIES}
+            REQUIRES cdbus
+            VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
+     endif( LIBEV_PKG_FOUND )
+endif( NOT CDBUS_NO_LIBEV_LOOP )
+
+if( NOT CDBUS_NO_GLIB_LOOP )
+    install_pkg_config_file(cdbus-glib
+        DESCRIPTION "Glib main loop binding for CDBUS."
+        CFLAGS
+        LIBS -lcdbus-glib
+        REQUIRES ${GLIB_PKG_LIBRARIES} cdbus
+        VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
+endif( NOT CDBUS_NO_GLIB_LOOP )
+
 # Documentation
 FIND_PACKAGE(Doxygen)
 IF(DOXYGEN_FOUND)

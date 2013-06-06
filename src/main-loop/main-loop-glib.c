@@ -43,6 +43,7 @@
 struct cdbus_MainLoopTimer
 {
     GSource*                    timerSrc;
+    cdbus_Bool                  isActive;
     guint                       msecInterval;
     cdbus_MainLoopTimerCbFunc   handler;
     cdbus_MainLoopGlib*         loop;
@@ -52,6 +53,7 @@ struct cdbus_MainLoopTimer
 struct cdbus_MainLoopWatch
 {
     GSource*                    ioSrc;
+    cdbus_Bool                  isActive;
     cdbus_Descriptor            fd;
     gushort                     flags;
     cdbus_MainLoopWatchCbFunc   handler;
@@ -154,6 +156,7 @@ cdbus_timerDestroyNotify
     {
         timer = (cdbus_MainLoopTimer*)data;
         g_source_unref(timer->timerSrc);
+        timer->timerSrc = NULL;
     }
 }
 
@@ -194,6 +197,7 @@ cdbus_mainLoopTimerNew
         if ( NULL != timer )
         {
             timer->timerSrc = NULL;
+            timer->isActive = CDBUS_FALSE;
             timer->msecInterval = msecTimeout;
             timer->handler = handler;
             cdbus_mainLoopRef(loop);
@@ -213,10 +217,10 @@ cdbus_mainLoopTimerStop
 {
     if ( NULL != timer )
     {
-        if ( timer->timerSrc != NULL )
+        if ( timer->isActive )
         {
             g_source_destroy(timer->timerSrc);
-            timer->timerSrc = NULL;
+            timer->isActive = CDBUS_FALSE;
         }
     }
 }
@@ -250,7 +254,7 @@ cdbus_mainLoopTimerIsEnabled
 
     if ( NULL != timer )
     {
-        isEnabled = (timer->timerSrc != NULL) ? CDBUS_TRUE : CDBUS_FALSE;
+        isEnabled = timer->isActive;
     }
     return isEnabled;
 }
@@ -274,6 +278,7 @@ cdbus_mainLoopTimerStart
                                 timer, cdbus_timerDestroyNotify);
         ctx = g_main_loop_get_context(timer->loop->glibLoop);
         g_source_attach(timer->timerSrc, ctx);
+        timer->isActive = CDBUS_TRUE;
     }
 }
 
@@ -363,6 +368,7 @@ cdbus_watchDestroyNotify
     {
         watch = (cdbus_MainLoopWatch*)data;
         g_source_unref(watch->ioSrc);
+        watch->ioSrc = NULL;
     }
 }
 
@@ -410,6 +416,7 @@ cdbus_mainLoopWatchNew
         if ( NULL != watch )
         {
             watch->ioSrc = NULL;
+            watch->isActive = CDBUS_FALSE;
             watch->fd = fd;
             watch->flags = cdbus_convertToGlibFlags(flags);
             watch->handler = handler;
@@ -431,10 +438,10 @@ cdbus_mainLoopWatchStop
 {
     if ( NULL != watch )
     {
-        if ( watch->ioSrc != NULL )
+        if ( watch->isActive )
         {
             g_source_destroy(watch->ioSrc);
-            watch->ioSrc = NULL;
+            watch->isActive = FALSE;
         }
     }
 }
@@ -468,7 +475,7 @@ cdbus_mainLoopWatchIsEnabled
 
     if ( NULL != watch )
     {
-        isEnabled = (watch->ioSrc != NULL) ? CDBUS_TRUE : CDBUS_FALSE;
+        isEnabled = watch->isActive;
     }
     return isEnabled;
 }
@@ -495,6 +502,7 @@ cdbus_mainLoopWatchStart
                                 watch, cdbus_watchDestroyNotify);
         ctx = g_main_loop_get_context(watch->loop->glibLoop);
         g_source_attach(watch->ioSrc, ctx);
+        watch->isActive = CDBUS_TRUE;
     }
 }
 

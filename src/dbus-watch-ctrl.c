@@ -174,7 +174,7 @@ cdbus_watchRemoveHandler
 
     if ( NULL != dbusWatch )
     {
-        w = dbus_watch_get_data(dbusWatch);
+        w = (cdbus_Watch*)dbus_watch_get_data(dbusWatch);
         if ( NULL != w )
         {
             rc = cdbus_watchEnable(w, CDBUS_FALSE);

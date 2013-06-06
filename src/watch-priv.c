@@ -335,8 +335,7 @@ cdbus_watchEnable
         /* If we want to enable the watcher then ... */
         if ( option )
         {
-            /* If it's not currently active (and thus managed by
-             * the dispatcher) then ...
+            /* If it's not currently active then ...
              */
             if ( !w->dispatcher->loop->watchIsEnabled(w->watch) )
             {
@@ -347,12 +346,11 @@ cdbus_watchEnable
         }
         else
         {
-            /* If the watch is currently active then
-             * this implies that the dispatcher is managing it.
+            /* If the watch is currently active then ...
              */
             if ( w->dispatcher->loop->watchIsEnabled(w->watch) )
             {
-                /* Start the watch */
+                /* Stop the watch */
                 w->dispatcher->loop->watchStop(w->watch);
                 cdbus_dispatcherWakeup(w->dispatcher);
             }
