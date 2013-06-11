@@ -69,13 +69,20 @@ void cdbus_traceMessage(cdbus_UInt32 level, struct DBusMessage* msg);
     #define CDBUS_TRACE(X) \
         do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), __FUNCTION__, __LINE__); \
         cdbus_trace X; } while ( 0 )
+    #define CDBUS_TRACE_MSG(X) \
+        do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), __FUNCTION__, __LINE__); \
+        cdbus_traceMessage X; } while ( 0 )
 #else
     #define CDBUS_TRACE(X) \
         do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), 0, __LINE__); \
         cdbus_trace X; } while ( 0 )
+    #define CDBUS_TRACE_MSG(X) \
+        do { cdbus_tracePrintPrefix(cdbus_traceIsEnabled X, CDBUS_BASENAME(__FILE__), 0, __LINE__); \
+        cdbus_traceMessage X; } while ( 0 )
 #endif
 #else
     #define CDBUS_TRACE(X) do { if ( 0 ) cdbus_trace X; } while ( 0 )
+    #define CDBUS_TRACE_MSG(X) do { if ( 0 ) cdbus_traceMessage X; } while ( 0 )
 #endif
 
 

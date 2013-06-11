@@ -120,7 +120,7 @@ cdbus_connectionObjectPathMsgHandler
 
     if ( (NULL != msg) && (NULL != userData) )
     {
-        cdbus_traceMessage(CDBUS_TRC_TRACE, msg);
+        CDBUS_TRACE_MSG((CDBUS_TRC_TRACE, msg));
 
         binder = (cdbus_ObjectConnBinding*)userData;
         if ( NULL != binder->obj->handler )
@@ -208,6 +208,8 @@ cdbus_connectionFilterHandler
     cdbus_HResult rc = CDBUS_RESULT_SUCCESS;
 
     CDBUS_UNUSED(dbusConn);
+
+    CDBUS_TRACE_MSG((CDBUS_TRC_TRACE, msg));
 
     if ( NULL != conn )
     {

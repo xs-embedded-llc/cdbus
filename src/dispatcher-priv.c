@@ -116,7 +116,7 @@ cdbus_wakeupHandler
             nextConn = LIST_NEXT(conn, link);
             status = dbus_connection_get_dispatch_status(
                                             cdbus_connectionGetDBus(conn));
-            if ( DBUS_DISPATCH_DATA_REMAINS == status )
+            while ( DBUS_DISPATCH_DATA_REMAINS == status )
             {
                 status = dbus_connection_dispatch(conn->dbusConn);
             }

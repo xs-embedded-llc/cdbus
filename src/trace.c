@@ -163,35 +163,35 @@ cdbus_traceMessage
             path = dbus_message_get_path(msg);
             intf = dbus_message_get_interface(msg);
             name = dbus_message_get_member(msg);
-            CDBUS_TRACE((level, "(Ser=%u) [%s] <%s> %s%s%s",
+            cdbus_trace(level, "(Ser=%u) [%s] <%s> %s%s%s",
                 dbus_message_get_serial(msg),
                 msgTypeStr,
                 path ? path : "",
                 intf ? intf : "",
                 intf ? "." : "",
-                name ? name : ""));
+                name ? name : "");
         }
         else if (DBUS_MESSAGE_TYPE_METHOD_RETURN == msgType)
         {
             dest = dbus_message_get_destination(msg);
-            CDBUS_TRACE((level, "(RSer=%u) [%s] -> %s",
+            cdbus_trace(level, "(RSer=%u) [%s] -> %s",
                         dbus_message_get_reply_serial(msg),
                         msgTypeStr,
-                        dest ? dest : ""));
+                        dest ? dest : "");
         }
         else if (DBUS_MESSAGE_TYPE_ERROR == msgType )
         {
             errName = dbus_message_get_error_name(msg);
-            CDBUS_TRACE((level, "(RSer=%u) [%s] %s",
+            cdbus_trace(level, "(RSer=%u) [%s] %s",
                                     dbus_message_get_reply_serial(msg),
                                     msgTypeStr,
-                                    errName ? errName : ""));
+                                    errName ? errName : "");
         }
         else
         {
-            CDBUS_TRACE((level, "(Ser=%u) [%s]",
+            cdbus_trace(level, "(Ser=%u) [%s]",
                                             dbus_message_get_serial(msg),
-                                            msgTypeStr));
+                                            msgTypeStr);
         }
     }
 }
