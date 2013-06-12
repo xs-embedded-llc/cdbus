@@ -24,6 +24,10 @@ pkg_check_modules(DBUSLIB_PKG REQUIRED "dbus-1>=1.4.0")
 include_directories(${DBUSLIB_PKG_INCLUDE_DIRS})
 link_directories(${DBUSLIB_PKG_LIBRARY_DIRS})
 
+pkg_check_modules(GLIB_PKG "glib-2.0")
+if ( GLIB_PKG_FOUND )
+    include_directories(${GLIB_PKG_INCLUDE_DIRS})
+endif( GLIB_PKG_FOUND )
 
 pkg_check_modules(LIBEV_PKG "ev")
 if( LIBEV_PKG_FOUND )
@@ -61,6 +65,9 @@ else( CDBUS_PKG_FOUND )
     endif( "${CDBUS_LIB}" STREQUAL "CDBUS_LIB-NOTFOUND" )
 endif( CDBUS_PKG_FOUND )
 
+pkg_check_modules(CDBUS_LIBEV_PKG "cdbus-ev")
+pkg_check_modules(CDBUS_GLIB_PKG "cdbus-glib")
+
 # See if a specific Lua version has already been specified
 if( NOT DEFINED PING_LUA_VERSION )
     # The default is to use 5.1
@@ -79,7 +86,10 @@ MESSAGE(STATUS "Found Lua version ${LUA_VERSION_STRING}")
 include_directories(${LUA_INCLUDE_DIR})
 target_link_libraries(ping_stress2 ${DBUSLIB_PKG_LIBRARIES}
                                    ${LIBEV_PKG_LIBRARIES}
+                                   ${GLIB_PKG_LIBRARIES}
                                    ${CDBUS_PKG_LIBRARIES}
+                                   ${CDBUS_LIBEV_PKG_LIBRARIES}
+                                   ${CDBUS_GLIB_PKG_LIBRARIES}
                                    ${LUA_LIBRARIES})
 
 LINK_DIRECTORIES(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})

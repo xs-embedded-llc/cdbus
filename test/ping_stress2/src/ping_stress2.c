@@ -20,8 +20,9 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include "cdbus/cdbus.h"
+#include "cdbus/main-loop-ev.h"
+#include "cdbus/main-loop-glib.h"
 #include "dbus/dbus.h"
-#include "ev.h"
 
 /*---------------
   -- Const
@@ -48,6 +49,7 @@
                                                                                            \n\
   Common Args:                                                                             \n\
   --bus [busName]       -- Bus name                                                        \n\
+  -g                    -- Use Glib based main loop                                        \n\
   -p [filename]         -- PID file.  Place to store the PID.  Useful with other tools.    \n\
   -v                    -- Verbosity                                                       \n\
                            v = level 1, Basic Count                                        \n\
@@ -209,8 +211,7 @@ enum {
   -- Globals
   ---------------*/
 
-static struct ev_loop       *g_loop            = NULL;
-
+static cdbus_MainLoop       *g_loop            = NULL;
 static cdbus_Dispatcher     *g_dispatcher      = NULL;
 static cdbus_Connection     *g_conn            = NULL;
 static DbusService          *g_dbusSvc         = NULL;
@@ -224,7 +225,7 @@ static char                 g_cmd;
 static sem_t                g_exitSem;
 static sem_t                g_clientSem;
 static sem_t                g_replySem;
-static struct ev_io         g_pipeWatch;
+static cdbus_Watch*         g_pipeWatch        = NULL;
 static int                  g_cmdPipe[MAX_FD];
 
 
@@ -235,6 +236,7 @@ static char                 *g_payload         = NULL;
 static const char           *g_reqName         = "";
 
 static cdbus_Bool           g_infiniteMode     = CDBUS_TRUE;
+static volatile cdbus_Bool  g_abort            = CDBUS_FALSE;
 
 /* Command line options */
 static cdbus_Bool           g_asyncMode        = CDBUS_FALSE; /* -a option                  */
@@ -250,6 +252,7 @@ static cdbus_Bool           g_timestamp        = CDBUS_FALSE; /* -t option      
 static cdbus_Bool           g_timerAPI         = CDBUS_FALSE; /* -timerapi option           */
 static int                  g_verbose          = 0;           /* -v option                  */
 static cdbus_Bool           g_waitOnExit       = CDBUS_FALSE; /* -w option                  */
+static cdbus_Bool           g_useGlib          = CDBUS_FALSE; /* -g option                  */
 
     
 /*---------------
@@ -349,7 +352,7 @@ static void postClientRequest()
     snapshot();  /* display stats */
     printf("\n");
 
-    shutdownDbus();
+    cdbus_dispatcherStop(g_dispatcher);
 
     if (g_waitOnExit == CDBUS_TRUE)
     {
@@ -447,14 +450,14 @@ static void sigHandler( int sig )
     snapshot();
     printf("\n");
 
-    if ( !g_serverMode )
+    /* Abort client thread processing */
+    g_abort = CDBUS_TRUE;
+    if ( !g_timerAPI )
     {
-        /* Client */
-        if ( g_clientThread > 0 )
-        {
-            pthread_cancel( g_clientThread );
-            g_clientThread = 0;
-        }
+        /* Don't want the thread to get hung up waiting
+         * for an indication a message has been sent.
+         */
+        sem_post( &g_clientSem );
     }
 
     if (g_payload)
@@ -777,7 +780,7 @@ static void *clientThreadPipeHandler( void *usr_iface_ptr )
     if (g_timestamp)
         clock_gettime(CLOCK_MONOTONIC, &g_stats.startTime);
 
-    while ((g_infiniteMode == CDBUS_TRUE) || (g_iterCount > 0))
+    while ( !g_abort && ((g_infiniteMode == CDBUS_TRUE) || (g_iterCount > 0)))
     {
         /*----------------------------------------------------*/
         /*-- Do request                                       */
@@ -804,7 +807,7 @@ static void *clientThreadPipeHandler( void *usr_iface_ptr )
 
     } /* end loop */
 
-    if (!g_infiniteMode)
+    if (!g_infiniteMode && !g_abort)
     {
         /* Wait for the sending to complete before we exit */
         sem_wait( &g_exitSem );
@@ -938,17 +941,20 @@ cdbus_Bool clientTimeoutHandler( cdbus_Timeout  *hTimer,
 *
 *  \param          [in]    watch      ....N/A
 *  \param          [in]    revents    ....mask of event that triggered
+*  \param          [in]    data       ....user data
 *
 ******************************************************************************/
-static void cmdPipe_cb(EV_P_ struct ev_io *watch, int revents)
+static cdbus_Bool cmdPipe_cb(cdbus_Watch* watch, cdbus_UInt32 revents, void* data)
 {
     char    cmd;
 
     (void)watch;
+    (void)data;
 
-    if ((revents & EV_READ) == 0)
+    if ((revents & DBUS_WATCH_READABLE) == 0)
     {
-        return;
+        /* Unused return value */
+        return CDBUS_TRUE;
     }
 
     while ( sizeof(cmd) == read(g_cmdPipe[READ_FD], (void*)(&cmd), sizeof(cmd)) )
@@ -969,25 +975,11 @@ static void cmdPipe_cb(EV_P_ struct ev_io *watch, int revents)
         sem_post( &g_exitSem );
     }
 
+    /* Unused return value */
+    return CDBUS_TRUE;
+
 } /* cmdPipe_cb */
 
-/*!****************************************************************************
-*
-*  \b              wakeup
-*
-*
-*  [add description here]
-*
-*  \param          [in]    disp        ....
-*  \param          [in]    userData    ....
-*
-******************************************************************************/
-static void wakeup ( cdbus_Dispatcher   *disp,
-                     void               *userData )
-{
-    (void)userData;
-    cdbus_dispatcherInvokePending(disp);
-} /* wakeup */
 
 /*!****************************************************************************
 *
@@ -1448,7 +1440,7 @@ DbusService* newService( cdbus_Bool  privConn )
     svc->privConn = privConn;
     svc->svcName  = strdup("PingStress");
 
-    svc->disp = cdbus_dispatcherNew(EV_DEFAULT_ CDBUS_TRUE, wakeup, NULL);
+    svc->disp = cdbus_dispatcherNew(g_loop);
     assert( NULL != svc->disp );
 
     introspectIntf = cdbus_introspectNew();
@@ -1534,6 +1526,7 @@ void initCmdPipe()
 
     g_cmdPipe[READ_FD]  = INVALID_FD;
     g_cmdPipe[WRITE_FD] = INVALID_FD;
+    cdbus_HResult rc;
 
     ret = pipe( g_cmdPipe );
     if ( 0 != ret )
@@ -1544,8 +1537,14 @@ void initCmdPipe()
     fcntl(g_cmdPipe[READ_FD],  F_SETFL, O_NONBLOCK);
     fcntl(g_cmdPipe[WRITE_FD], F_SETFL, O_NONBLOCK);
 
-    ev_io_init( &g_pipeWatch, cmdPipe_cb, g_cmdPipe[READ_FD], EV_READ );
-    ev_io_start( g_loop, &g_pipeWatch );
+    g_pipeWatch = cdbus_watchNew(g_dispatcher,
+                                g_cmdPipe[READ_FD], DBUS_WATCH_READABLE,
+                                cmdPipe_cb, NULL);
+    rc = cdbus_watchEnable(g_pipeWatch, CDBUS_TRUE);
+    if ( CDBUS_FAILED(rc) )
+    {
+        DIE(("ERROR: unable to enable pipe watch\n"));
+    }
 
     ret = pthread_create( &g_clientThread, NULL, 
                           clientThreadPipeHandler,  NULL);
@@ -1577,16 +1576,17 @@ void initDbus()
     }
 
     /* New dispatcher */
-    if (!g_serverMode)
+    if ( g_useGlib )
     {
-        g_loop       = ev_default_loop (0);
-        g_dispatcher = cdbus_dispatcherNew(g_loop, CDBUS_FALSE, wakeup, NULL);
+        g_loop = CDBUS_MAIN_LOOP_GLIB_NEW(NULL, CDBUS_FALSE, NULL);
     }
     else
     {
-        /* Uses the default loop internally */
-        g_dispatcher = cdbus_dispatcherNew(EV_DEFAULT_ CDBUS_FALSE, wakeup, NULL);
+        g_loop = CDBUS_MAIN_LOOP_EV_NEW(EV_DEFAULT, CDBUS_FALSE, NULL);
     }
+
+    g_dispatcher   = cdbus_dispatcherNew(g_loop);
+
 
     if ( NULL == g_dispatcher )
     {
@@ -1728,6 +1728,10 @@ static void parseArgs(int argc, char **argv)
             g_ignoreReply  = CDBUS_TRUE;
             break;
 
+        case 'g':
+            g_useGlib = CDBUS_TRUE;
+            break;
+
         case 'h':
             bHelp = CDBUS_TRUE;
             break;
@@ -1818,6 +1822,7 @@ static void parseArgs(int argc, char **argv)
         if (pid != -1)
             printf("PID Filename:                       %s\n", sPidFile); 
 
+        printf("Main loop Selected:                 %s\n", g_useGlib ? "Glib" : "Libev");
         if (g_serverMode)
         {
             printf("PID:                                %d\n", pid);
@@ -1881,6 +1886,11 @@ int shutdownDbus()
     cdbus_connectionClose( g_conn );
     cdbus_connectionUnref( g_conn );
 
+    if ( NULL != g_pipeWatch )
+    {
+        cdbus_watchUnref(g_pipeWatch);
+    }
+
     /* FIXME: Need some thought/work for clean shutdown */
     cdbus_dispatcherUnref( g_dispatcher );
     //cdbus_dispatcherStop(  g_dispatcher );
@@ -1911,6 +1921,12 @@ int main(int argc, char **argv)
     /* Run the main loop                                   */
     /*-----------------------------------------------------*/
     cdbus_dispatcherRun(g_dispatcher, CDBUS_RUN_WAIT);
+
+    /* Join to the client thread if it's running */
+    if ( g_clientThread > 0 )
+    {
+        pthread_join(g_clientThread, NULL);
+    }
 
     shutdownDbus();
 

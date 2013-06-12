@@ -42,8 +42,21 @@ CDBUS_BEGIN_DECLS
 /* Forward declarations */
 struct cdbus_Dispatcher;
 typedef struct cdbus_Watch cdbus_Watch;
-typedef cdbus_Bool (*cdbus_WatchHandler)(cdbus_Watch* w, cdbus_UInt32, void*);
 
+/*
+ * Note: Currently the return value for the watch handler is unused
+ */
+typedef cdbus_Bool (*cdbus_WatchHandler)(cdbus_Watch* w,
+                                        cdbus_UInt32 rcvEvents,
+                                        void* data);
+
+/*
+ * Watch flags are defined as bitwise combination of D-Bus flags:
+ *      DBUS_WATCH_READABLE;
+ *      DBUS_WATCH_WRITABLE;
+ *      DBUS_WATCH_ERROR;
+ *      DBUS_WATCH_HANGUP
+ */
 CDBUS_EXPORT cdbus_Watch* cdbus_watchNew(struct cdbus_Dispatcher* dispatcher,
                                      cdbus_Descriptor fd, cdbus_UInt32 flags,
                                      cdbus_WatchHandler h, void* data);
