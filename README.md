@@ -2,16 +2,17 @@
 ---
 ## Introduction
 
-The *C* D-Bus library (CDBUS) is a simple binding (in *C*) to the D-Bus reference library. It does **not** attempt to wrap and abstract the entire reference library but is intended, instead, to compliment the functions and features provided by it. To that end, CDBUS does provide several useful abstraction (Timer, Watch, Dispatcher, Interface, etc...) that simplify implementing D-Bus clients and services from *C* without incurring the need for a heavier-weight framework (e.g. GLib/GObject, QT, etc...). It also provides a *main loop* courtesy of an underlying [libev](http://software.schmorp.de/pkg/libev.html) based main loop. 
+The *C* D-Bus library (CDBUS) is a simple binding (in *C*) to the D-Bus reference library. It does **not** attempt to wrap and abstract the entire reference library but is intended, instead, to compliment the functions and features provided by it. To that end, CDBUS does provide several useful abstraction (Timer, Watch, Dispatcher, Interface, etc...) that simplify implementing D-Bus clients and services from *C* without incurring the need for a heavier-weight framework (e.g. GLib/GObject, QT, etc...). It also provides a *main loop* abstraction that can be implemented by many main loop implementations. Initially two main loop implementations are provided: one for [libev](http://software.schmorp.de/pkg/libev.html) and one for [Glib](https://developer.gnome.org/glib/). It should be straightforward to add additional implementations for other popular main loop implementations. 
 
 ## Dependencies
 
 CDBUS depends on the following external libraries:
 
-* [D-Bus reference Library](http://dbus.freedesktop.org/releases/dbus/) (version > 1.4.X)
-* [libev](http://software.schmorp.de/pkg/libev.html) (version >= 4.00)
-* [Doxygen](http://www.doxygen.org/) Necessary for building documentation.
-* [CMake](http://www.cmake.org/) (version >= 2.6.0) Necessary for building.
+   * [D-Bus reference Library](http://dbus.freedesktop.org/releases/dbus/) (version > 1.4.X)
+   * [libev](http://software.schmorp.de/pkg/libev.html) (version >= 4.00) **Optional**
+   * [Glib](https://developer.gnome.org/glib/) (version >= 2.0.0) **Optional**
+   * [Doxygen](http://www.doxygen.org/) Necessary for building documentation.
+   * [CMake](http://www.cmake.org/) (version >= 2.6.0) Necessary for building.
 
 
 ## Building
@@ -31,6 +32,21 @@ By default a *release* version of the library is built. A "debug" option can be 
 ### Target Build
 
 There is also a script to build a cross-compiled version of the library (*build_target.sh*). This needs to up modified for the particular build environment. In particular, a CMake toolchain file must be specifed (*cmake.toolchain*) which should be located in the top-level path defined by *CMAKE_TOOLCHAIN_PATH_PREFIX*. Furthermore a shell script (*environment-setup*), if present in the same toolchain path, will be sourced prior to building the target library. Additional details on cross-compiling under CMake can be found [here](http://www.vtk.org/Wiki/CMake_Cross_Compiling).
+
+### Building Main Loop Back-ends
+
+It is possible to control which main loop back-ends are built. By default, the build scripts will attempt to build all the main loop back-ends (libev and Glib). To **disable** a specific main loop back-end a CMake macro can be defined.
+
+To disable the libev main loop the following CMake macro needs to be defined when generating the Makefile:
+
+   # ./build_host.sh -DCDBUS_NO_LIBEV_LOOP=1
+
+Likewise, to disable the Glib main loop pass the following macro to CMake:
+
+   # ./build_host.sh -DCDBUS_NO_GLIB_LOOP=1
+   
+At least one main loop back-end must be built in order to effectively use CDBUS. In the future additional main loop implementations will likely be handled in a similar manner.
+
 
 ### Installation
 
@@ -72,7 +88,7 @@ or
 
 	# make uninstall
 
-Both options will remove the documentation while the last option (uninstall) removing the entire installation as well.
+Both options will remove the documentation while the last option (uninstall) removes the entire installation as well.
 
 To generate a source distribution type:
 
