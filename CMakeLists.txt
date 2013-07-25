@@ -29,17 +29,18 @@ set(CDBUS_MAIN_LOOP_EV_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-ev.c")
 set(CDBUS_MAIN_LOOP_GLIB_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-glib.c")
 
 # The "core" CDBUS library
-add_library(CDBUS_STATIC STATIC ${CDBUS_SRC_FILES})
-set_target_properties(CDBUS_STATIC PROPERTIES OUTPUT_NAME cdbus)
-add_library(CDBUS_SHARED SHARED ${CDBUS_SRC_FILES})
-set_target_properties(CDBUS_SHARED PROPERTIES OUTPUT_NAME cdbus)
+IF(NOT DEFINED CDBUS_NO_CORE)
+    add_library(CDBUS_STATIC STATIC ${CDBUS_SRC_FILES})
+    set_target_properties(CDBUS_STATIC PROPERTIES OUTPUT_NAME cdbus)
+    add_library(CDBUS_SHARED SHARED ${CDBUS_SRC_FILES})
+    set_target_properties(CDBUS_SHARED PROPERTIES OUTPUT_NAME cdbus)
 
-set_target_properties(CDBUS_SHARED PROPERTIES 
-                      SOVERSION "${CDBUS_MAJOR_VERSION}"
-                      VERSION "${CDBUS_VERSION_STRING}")
-# This forces the builds to serialize
-add_dependencies(CDBUS_SHARED CDBUS_STATIC)
-
+    set_target_properties(CDBUS_SHARED PROPERTIES 
+                          SOVERSION "${CDBUS_MAJOR_VERSION}"
+                          VERSION "${CDBUS_VERSION_STRING}")
+    # This forces the builds to serialize
+    add_dependencies(CDBUS_SHARED CDBUS_STATIC)
+endif( NOT CDBUS_NO_CORE )
                       
 # The libev main loop library
 if( NOT CDBUS_NO_LIBEV_LOOP )
@@ -120,8 +121,10 @@ if( NOT CDBUS_NO_GLIB_LOOP )
     target_link_libraries(CDBUS_MAIN_LOOP_GLIB_STATIC ${GLIB_PKG_LIBRARIES} "cdbus")
 endif( NOT CDBUS_NO_GLIB_LOOP )
 
-target_link_libraries(CDBUS_SHARED ${DBUSLIB_PKG_LIBRARIES})
-target_link_libraries(CDBUS_STATIC ${DBUSLIB_PKG_LIBRARIES})
+if( NOT CDBUS_NO_GLIB_LOOP )
+    target_link_libraries(CDBUS_SHARED ${DBUSLIB_PKG_LIBRARIES})
+    target_link_libraries(CDBUS_STATIC ${DBUSLIB_PKG_LIBRARIES})
+endif( NOT CDBUS_NO_GLIB_LOOP )
 
 LINK_DIRECTORIES(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
@@ -132,10 +135,12 @@ set(INSTALL_TARGETS_DEFAULT_ARGS
     ARCHIVE DESTINATION lib
 )
 
-install(DIRECTORY "${INCLUDE_DIRS}/cdbus" DESTINATION include
+if( NOT CDBUS_NO_CORE )
+    install(DIRECTORY "${INCLUDE_DIRS}/cdbus" DESTINATION include
         PATTERN "main-loop-*.h" EXCLUDE)
-install(TARGETS CDBUS_SHARED LIBRARY DESTINATION lib)
-install(TARGETS CDBUS_STATIC ARCHIVE DESTINATION lib)
+    install(TARGETS CDBUS_SHARED LIBRARY DESTINATION lib)
+    install(TARGETS CDBUS_STATIC ARCHIVE DESTINATION lib)
+endif( NOT CDBUS_NO_CORE )
 
 if( NOT CDBUS_NO_GLIB_LOOP )
     install(FILES "${INCLUDE_DIRS}/cdbus/main-loop-glib.h" DESTINATION include/cdbus)
@@ -164,38 +169,40 @@ add_custom_target(uninstall
 export(PACKAGE cdbus)
 
 # Create a cdbus-config.cmake file for the use from the build tree
-set(CDBUS_INCLUDE_DIRS "${INCLUDE_DIRS}")
-set(CDBUS_LIB_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-# Not used right now (export depends?)
-#set(CDBUS_CMAKE_DIR "${PROJECT_BINARY_DIR}")
-configure_file(cdbus-config.cmake.in
-  "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/cdbus/cdbus-config.cmake" @ONLY)
-configure_file(cdbus-config-version.cmake.in
-  "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/cdbus/cdbus-config-version.cmake" @ONLY)
-
- 
-# Create a cdbus-config.cmake file for the use from the install tree
-# and install it
-set(CDBUS_INCLUDE_DIRS "${CMAKE_INSTALL_PREFIX}/include")
-set(CDBUS_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
-#set(OCTOMAP_CMAKE_DIR "${INSTALL_DATA_DIR}/FooBar/CMake")
-configure_file(cdbus-config.cmake.in
-  "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config.cmake" @ONLY)
-configure_file(cdbus-config-version.cmake.in
-  "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config-version.cmake" @ONLY)
-install(FILES
-  "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config.cmake"
-  "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config-version.cmake"
-  DESTINATION lib/cmake/cdbus/)
-
-# Write pkgconfig-file:
 include(InstallPkgConfigFile)
-install_pkg_config_file(cdbus
-    DESCRIPTION "Simple 'C' binding to D-Bus library with main loop integration."
-    CFLAGS
-    LIBS -lcdbus
-    REQUIRES dbus-1
-    VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
+if( NOT CDBUS_NO_CORE )
+    set(CDBUS_INCLUDE_DIRS "${INCLUDE_DIRS}")
+    set(CDBUS_LIB_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+    # Not used right now (export depends?)
+    #set(CDBUS_CMAKE_DIR "${PROJECT_BINARY_DIR}")
+    configure_file(cdbus-config.cmake.in
+      "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/cdbus/cdbus-config.cmake" @ONLY)
+    configure_file(cdbus-config-version.cmake.in
+      "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/cdbus/cdbus-config-version.cmake" @ONLY)
+ 
+    # Create a cdbus-config.cmake file for the use from the install tree
+    # and install it
+    set(CDBUS_INCLUDE_DIRS "${CMAKE_INSTALL_PREFIX}/include")
+    set(CDBUS_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
+    #set(OCTOMAP_CMAKE_DIR "${INSTALL_DATA_DIR}/FooBar/CMake")
+    configure_file(cdbus-config.cmake.in
+      "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config.cmake" @ONLY)
+    configure_file(cdbus-config-version.cmake.in
+      "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config-version.cmake" @ONLY)
+    install(FILES
+      "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config.cmake"
+      "${PROJECT_BINARY_DIR}/InstallFiles/cdbus-config-version.cmake"
+      DESTINATION lib/cmake/cdbus/)
+
+
+    # Write pkgconfig-file:
+    install_pkg_config_file(cdbus
+        DESCRIPTION "Simple 'C' binding to D-Bus library with main loop integration."
+        CFLAGS
+        LIBS -lcdbus
+        REQUIRES dbus-1
+        VERSION ${CDBUS_MAJOR_VERSION}.${CDBUS_MINOR_VERSION}.${CDBUS_RELEASE_VERSION})
+endif( NOT CDBUS_NO_CORE )
 
 if( NOT CDBUS_NO_LIBEV_LOOP )
     if( LIBEV_PKG_FOUND )
