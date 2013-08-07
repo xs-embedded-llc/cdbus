@@ -28,6 +28,20 @@ file(GLOB CDBUS_SRC_FILES "${CDBUS_SRC_DIR}/*.c")
 set(CDBUS_MAIN_LOOP_EV_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-ev.c")
 set(CDBUS_MAIN_LOOP_GLIB_SRC_FILES "${CDBUS_SRC_DIR}/main-loop/main-loop-glib.c")
 
+# Configure the compiler settings
+include(CompilerSettings)
+
+set(INCLUDE_DIRS "${CDBUS_ROOT_DIR}/include")
+include_directories( "${INCLUDE_DIRS}" )
+link_directories(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+
+# Pull in the pkg-config scripts
+include(FindPkgConfig)
+
+pkg_check_modules(DBUSLIB_PKG REQUIRED "dbus-1>=1.4.0")
+include_directories(${DBUSLIB_PKG_INCLUDE_DIRS})
+link_directories(${DBUSLIB_PKG_LIBRARY_DIRS})
+
 # The "core" CDBUS library
 IF(NOT DEFINED CDBUS_NO_CORE)
     add_library(CDBUS_STATIC STATIC ${CDBUS_SRC_FILES})
@@ -38,9 +52,9 @@ IF(NOT DEFINED CDBUS_NO_CORE)
     set_target_properties(CDBUS_SHARED PROPERTIES 
                           SOVERSION "${CDBUS_MAJOR_VERSION}"
                           VERSION "${CDBUS_VERSION_STRING}")
-    # This forces the builds to serialize
+     # This forces the builds to serialize
     add_dependencies(CDBUS_SHARED CDBUS_STATIC)
-endif( NOT CDBUS_NO_CORE )
+endif( NOT DEFINED CDBUS_NO_CORE )
                       
 # The libev main loop library
 if( NOT CDBUS_NO_LIBEV_LOOP )
@@ -54,6 +68,7 @@ if( NOT CDBUS_NO_LIBEV_LOOP )
                           VERSION "${CDBUS_VERSION_STRING}")
     # This forces the builds to serialize
     add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_MAIN_LOOP_EV_STATIC)
+    add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_SHARED)
 endif( NOT CDBUS_NO_LIBEV_LOOP )
 
                       
@@ -69,22 +84,9 @@ if( NOT CDBUS_NO_GLIB_LOOP )
                           VERSION "${CDBUS_VERSION_STRING}")
     # This forces the builds to serialize
     add_dependencies(CDBUS_MAIN_LOOP_GLIB_SHARED CDBUS_MAIN_LOOP_GLIB_STATIC)
+    add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_SHARED)
 endif( NOT CDBUS_NO_GLIB_LOOP )
 
-
-
-# Configure the compiler settings
-include(CompilerSettings)
-
-set(INCLUDE_DIRS "${CDBUS_ROOT_DIR}/include")
-include_directories( "${INCLUDE_DIRS}" )
-
-# Pull in the pkg-config scripts
-include(FindPkgConfig)
-
-pkg_check_modules(DBUSLIB_PKG REQUIRED "dbus-1>=1.4.0")
-include_directories(${DBUSLIB_PKG_INCLUDE_DIRS})
-link_directories(${DBUSLIB_PKG_LIBRARY_DIRS})
 
 if( NOT CDBUS_NO_LIBEV_LOOP )
     pkg_check_modules(LIBEV_PKG "ev")
