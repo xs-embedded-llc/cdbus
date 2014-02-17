@@ -238,7 +238,7 @@ if( NOT CDBUS_NO_GLIB_LOOP )
     target_link_libraries(CDBUS_MAIN_LOOP_GLIB_STATIC ${GLIB_PKG_LIBRARIES} "cdbus")
     # This forces the builds to serialize
     add_dependencies(CDBUS_MAIN_LOOP_GLIB_SHARED CDBUS_MAIN_LOOP_GLIB_STATIC)
-    add_dependencies(CDBUS_MAIN_LOOP_EV_SHARED CDBUS_SHARED)
+    add_dependencies(CDBUS_MAIN_LOOP_GLIB_SHARED CDBUS_SHARED)
 
     # Add installation targets "cdbus-glib"
     install(FILES "${INCLUDE_DIRS}/cdbus/main-loop-glib.h" DESTINATION include/cdbus)
