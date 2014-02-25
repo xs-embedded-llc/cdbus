@@ -41,6 +41,8 @@
 #include "internal.h"
 #include "trace.h"
 
+/* Embed library version into module */
+const char CDBUS_LIBRARY_VERSION[] = "CDBUS_"CDBUS_VERSION_STRING;
 
 /* Global Variables */
 #ifdef CDBUS_ENABLE_THREAD_SUPPORT
